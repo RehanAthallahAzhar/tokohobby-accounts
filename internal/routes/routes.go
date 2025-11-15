@@ -10,22 +10,16 @@ import (
 func InitRoutes(e *echo.Echo, api *handlers.UserHandler, tokenService token.TokenService) {
 	e.Static("/static", "template")
 
-	// without token
 	e.POST("/api/v1/accounts/register", api.RegisterUser)
 	e.POST("/api/v1/accounts/login", api.Login)
-
-	// Logout Endpoint (requires token to be blacklisted, but not validated by this middleware)
-	// JWT parsing and blacklist logic is handled within the handler.Logout
 	e.POST("/api/v1/accounts/logout", api.Logout)
 
-	// Requires JWT Authentication
-	// Create JWT authentication middleware
 	jwtAuthMiddleware := middlewares.AuthMiddleware(middlewares.AuthMiddlewareOptions{
 		TokenService: tokenService,
 	})
 
 	accountProtectedGroup := e.Group("/api/v1/accounts")
-	accountProtectedGroup.Use(jwtAuthMiddleware) // Apply JWT middleware
+	accountProtectedGroup.Use(jwtAuthMiddleware)
 	{
 		// all users
 		accountProtectedGroup.GET("/profile", api.GetUserProfile)

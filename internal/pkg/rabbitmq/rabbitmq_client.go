@@ -28,7 +28,6 @@ func NewRabbitMQClient(queueName string) (*RabbitMQClient, error) {
 		log.Printf("RABBITMQ_URL not set, using default: %s", rabbitMQURL)
 	}
 
-	// Retry Conn
 	for i := 0; i < maxRetries; i++ {
 		conn, err = amqp.Dial(rabbitMQURL)
 		if err == nil {
@@ -89,7 +88,6 @@ func (rc *RabbitMQClient) Close() {
 	}
 }
 
-// PublishMessage menerbitkan pesan ke queue default klien.
 func (rc *RabbitMQClient) PublishMessage(body []byte) error {
 	err := rc.Channel.Publish(
 		"",           // exchange (kosong berarti default exchange)
@@ -109,7 +107,6 @@ func (rc *RabbitMQClient) PublishMessage(body []byte) error {
 	return nil
 }
 
-// ConsumeMessages mengonsumsi pesan dari queue default dan memanggil handler.
 func (rc *RabbitMQClient) ConsumeMessages(handler func(msg amqp.Delivery) error) error {
 	msgs, err := rc.Channel.Consume(
 		rc.QueueName, // queue
@@ -132,15 +129,13 @@ func (rc *RabbitMQClient) ConsumeMessages(handler func(msg amqp.Delivery) error)
 			log.Printf("Received a message: %s", d.Body)
 			if err := handler(d); err != nil {
 				log.Printf("Error processing message: %v", err)
-				// NACK jika gagal proses, dengan re-queue
-				d.Nack(false, true) // Multiple = false, Requeue = true
+				d.Nack(false, true)
 			} else {
-				// ACK jika sukses proses
-				d.Ack(false) // Multiple = false
+				d.Ack(false)
 			}
 		}
 	}()
 
-	<-forever // Blok goroutine ini agar tetap berjalan
+	<-forever
 	return nil
 }

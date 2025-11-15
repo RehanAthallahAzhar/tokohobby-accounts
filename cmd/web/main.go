@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -61,9 +62,6 @@ func main() {
 		log.Fatalf("DB connection error: %v", err)
 	}
 
-	// Migrations
-	log.Println("Running database migrations...")
-
 	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		dbCredential.Username,
 		dbCredential.Password,
@@ -84,8 +82,6 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
-	log.Println("Database migrations ran successfully.")
-
 	defer conn.Close()
 
 	// Init SQLC
@@ -95,11 +91,11 @@ func main() {
 	_ = helpers.NewJWTHelper(cfg.Server.JWTSecret)
 
 	// Setup Redis
-	redisClient, err := redisclient.NewRedisClient()
+	redisClient, err := redisclient.NewRedisClient(&cfg.Redis, log)
 	if err != nil {
 		log.Fatalf("Failed to Inilialization redis client : %v", err)
 	}
-	defer redisClient.Close() // Make sure the Redis connection is closed
+	defer redisClient.Close()
 
 	// Setup Repo
 	usersRepo := repositories.NewUserRepository(sqlcQueries, log)
@@ -122,8 +118,6 @@ func main() {
 	accountpb.RegisterAccountServiceServer(s, grpcServer.NewAccountServer(userService))
 	reflection.Register(s)
 
-	log.Printf("gRPC server for Account service is listening on port %s", lis.Addr())
-
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("Failed to serve gRPC server: %v", err)
@@ -134,13 +128,19 @@ func main() {
 
 	e.Use(middleware.RequestID())
 	e.Use(customMiddleware.LoggingMiddleware(log))
-
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{
+			"http://localhost",
+			"http://localhost:5173",
+		},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+	}))
 	// Setup Route
 	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, log)
 	routes.InitRoutes(e, handler, tokenService)
 
 	// Start Echo API REST Server (Block main goroutine)
-	log.Printf("Server REST API Echo is listening on port %s", cfg.Server.Port)
 	e.Logger.Fatal(e.Start(":" + cfg.Server.Port))
 
 	/*

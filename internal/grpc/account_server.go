@@ -17,7 +17,6 @@ type AccountServer struct {
 	UserService services.UserService
 }
 
-// NewAccountServer creates a new AccountServer instance.
 func NewAccountServer(userService services.UserService) *AccountServer {
 	return &AccountServer{UserService: userService}
 }

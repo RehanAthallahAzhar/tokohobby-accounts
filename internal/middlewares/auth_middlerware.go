@@ -2,7 +2,6 @@ package middlewares
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"strings"
 
@@ -16,7 +15,6 @@ type AuthMiddlewareOptions struct {
 	TokenService token.TokenService
 }
 
-// AuthMiddleware is an Echo middleware function to validate JWT tokens for REST API.
 func AuthMiddleware(opts AuthMiddlewareOptions) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -28,9 +26,6 @@ func AuthMiddleware(opts AuthMiddlewareOptions) echo.MiddlewareFunc {
 
 			isValid, userID, username, userRole, errMsg, err := opts.TokenService.ValidateToken(context.Background(), token)
 			if err != nil {
-				log.Printf("Token validation error: %v", err)
-				// If the error is due to an expired token or cryptographic invalidity,
-				// TokenService already returns isValid=false and an appropriate errMsg.
 				return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Server error while validating token"})
 			}
 
@@ -42,7 +37,6 @@ func AuthMiddleware(opts AuthMiddlewareOptions) echo.MiddlewareFunc {
 			c.Set("username", username)
 			c.Set("role", userRole)
 
-			// Continue to the next handler
 			return next(c)
 		}
 	}

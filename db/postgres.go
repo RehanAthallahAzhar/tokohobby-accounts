@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/models"
@@ -29,16 +28,13 @@ func Connect(ctx context.Context, credential *models.Credential) (*sql.DB, error
 		return nil, fmt.Errorf("failed to open connection: %w", err)
 	}
 
-	// Optional: test connection
 	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Set connection pool settings
 	db.SetMaxIdleConns(10)
 	db.SetMaxOpenConns(100)
 	db.SetConnMaxLifetime(time.Hour)
 
-	log.Println("Database connection established successfully (sqlc).")
 	return db, nil
 }

@@ -8,19 +8,27 @@ import (
 
 func NewLogger() *logrus.Logger {
 	log := logrus.New()
+	log.SetOutput(os.Stdout)
 
 	if os.Getenv("ENV") == "production" {
 		log.SetFormatter(&logrus.JSONFormatter{})
-		log.SetLevel(logrus.InfoLevel)
 	} else {
 		log.SetFormatter(&logrus.TextFormatter{
 			FullTimestamp: true,
 			ForceColors:   true,
 		})
-		log.SetLevel(logrus.DebugLevel)
 	}
 
-	log.SetOutput(os.Stdout)
+	level, err := logrus.ParseLevel(os.Getenv("LOG_LEVEL"))
+	if err != nil {
+		if os.Getenv("ENV") == "production" {
+			level = logrus.InfoLevel
+		} else {
+			level = logrus.DebugLevel
+		}
+	}
+
+	log.SetLevel(level)
 
 	return log
 }

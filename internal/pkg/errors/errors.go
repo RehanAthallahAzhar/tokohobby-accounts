@@ -3,7 +3,6 @@ package errors
 import "errors"
 
 var (
-	// validation
 	ErrInvalidRequestPayload = errors.New("invalid request payload")
 	ErrInvalidQuery          = errors.New("invalid query parameters")
 	ErrInvalidUserSession    = errors.New("invalid user session")
@@ -20,17 +19,14 @@ var (
 	ErrNotFound              = errors.New("not found")
 	ErrForbidden             = errors.New("forbidden")
 
-	// status
 	ErrInternalServerError = errors.New("internal server error")
 
-	// user
 	ErrUserNotFound       = errors.New("user not found")
 	ErrFailedToReadUser   = errors.New("failed to read user")
 	ErrFailedToCreateUser = errors.New("failed to create user")
 	ErrFailedToUpdateUser = errors.New("failed to update user")
 	ErrFailedToDeleteUser = errors.New("failed to delete user")
 
-	// stock
 	ErrProductOutOfStock = errors.New("product out of stock")
 )
 

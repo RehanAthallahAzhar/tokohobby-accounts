@@ -1,19 +1,21 @@
 package redisclient
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/configs"
 	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 )
 
 type RedisClient struct {
 	Client *redis.Client
+	log    *logrus.Logger
 }
 
-func NewRedisClient() (*RedisClient, error) {
+func NewRedisClient(cfg *configs.RedisConfig, log *logrus.Logger) (*RedisClient, error) {
 	redisHost := os.Getenv("REDIS_HOST")
 	if redisHost == "" {
 		redisHost = "localhost"
@@ -25,27 +27,18 @@ func NewRedisClient() (*RedisClient, error) {
 	}
 
 	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
-	log.Printf("Account service connecting to Redis at %s", redisAddr)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     redisAddr,
 		Password: "",
-		DB:       0, // DB default
+		DB:       0,
 	})
 
-	// ping
-	ctx := context.Background()
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
-	}
-
-	log.Println("Successfully connected to Redis.")
-	return &RedisClient{Client: rdb}, nil
+	return &RedisClient{Client: rdb, log: log}, nil
 }
 
 func (rc *RedisClient) Close() {
 	if rc.Client != nil {
-		log.Println("Menutup koneksi Redis...")
 		err := rc.Client.Close()
 		if err != nil {
 			log.Printf("Gagal menutup koneksi Redis: %v", err)

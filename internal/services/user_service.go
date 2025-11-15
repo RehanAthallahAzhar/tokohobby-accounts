@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -76,8 +75,7 @@ func (s *UserServiceImpl) Register(ctx context.Context, req *models.UserRegister
 			errorMessages = append(errorMessages, fmt.Sprintf("Field '%s' failed on the '%s' tag", fieldErr.Field(), fieldErr.Tag()))
 		}
 
-		log.Printf("Product validation failed: %v", errorMessages)
-		return nil, fmt.Errorf("%w: %s", apperrors.ErrInvalidRequestPayload, strings.Join(errorMessages, ", ")) // Menggunakan error kustom
+		return nil, fmt.Errorf("%w: %s", apperrors.ErrInvalidRequestPayload, strings.Join(errorMessages, ", "))
 	}
 
 	if req.Role == "" {
@@ -86,7 +84,6 @@ func (s *UserServiceImpl) Register(ctx context.Context, req *models.UserRegister
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("Error hashing password: %v", err)
 		return nil, fmt.Errorf("service: Failed to register user: %w", err)
 	}
 
@@ -103,7 +100,6 @@ func (s *UserServiceImpl) Register(ctx context.Context, req *models.UserRegister
 
 	userDB, err := s.userRepo.CreateUser(ctx, dbParam)
 	if err != nil {
-		log.Printf("Error creating user: %v", err)
 		return nil, fmt.Errorf("service: failed to register user: %w", err)
 	}
 
@@ -132,7 +128,6 @@ func (s *UserServiceImpl) Login(ctx context.Context, req *models.UserLoginReques
 
 	err = bcrypt.CompareHashAndPassword([]byte(userDB.Password), []byte(req.Password))
 	if err != nil {
-		log.Printf("Password comparison failed: %v", err)
 		s.log.WithError(err).Error("Password comparison failed")
 		return nil, apperrors.ErrInvalidCredentials
 	}
@@ -161,7 +156,6 @@ func (s *UserServiceImpl) Logout(ctx context.Context, authHeader string) error {
 
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &models.JWTClaims{})
 	if err != nil {
-		log.Printf("Error parsing unverified JWT for logout: %v", err)
 		return apperrors.ErrInvalidToken
 	}
 
@@ -175,20 +169,16 @@ func (s *UserServiceImpl) Logout(ctx context.Context, authHeader string) error {
 		return apperrors.ErrMissingJTI
 	}
 
-	// Calculate remaining time the token is valid
 	remainingTime := time.Until(claims.ExpiresAt.Time)
 	if remainingTime < 0 {
-		return apperrors.ErrExpiredToken // Token is already expired, no need to blacklist
+		return apperrors.ErrExpiredToken
 	}
 
-	// Add JTI to Redis blacklist using JWTBlacklistRepo
 	err = s.JWTBlacklistRepo.AddToBlacklist(ctx, jti, remainingTime)
 	if err != nil {
-		log.Printf("Error adding JTI %s to blacklist: %v", jti, err)
 		return apperrors.ErrFailedToRevokeToken
 	}
 
-	log.Printf("Token with JTI %s successfully revoked.", jti)
 	return nil
 }
 

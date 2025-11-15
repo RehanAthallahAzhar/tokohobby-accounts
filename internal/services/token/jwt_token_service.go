@@ -3,7 +3,6 @@ package token
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,7 +12,6 @@ import (
 	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/repositories"
 )
 
-// Custom JWT Claims (must be consistent across the application)
 type JWTClaims struct {
 	UserID   uuid.UUID `json:"user_id"`
 	Username string    `json:"username"`
@@ -26,7 +24,6 @@ type jwtTokenService struct {
 	jwtBlacklistRepo repositories.JWTBlacklistRepository
 }
 
-// NewJWTTokenService creates a new JWTTokenService instance.
 func NewJWTTokenService(jwtSecret string, jwtBlacklistRepo repositories.JWTBlacklistRepository) TokenService {
 	return &jwtTokenService{
 		jwtSecret:        jwtSecret,
@@ -43,10 +40,10 @@ func (s *jwtTokenService) GenerateToken(ctx context.Context, user *entities.User
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
-			ID:        uuid.New().String(), // Unique JTI (JWT ID) for blacklisting
+			ID:        uuid.New().String(),
 			Issuer:    "shopeezy-account-service",
 			Subject:   user.Username,
-			Audience:  jwt.ClaimStrings{"shopeezy-cashier-app"}, // Audience if needed
+			Audience:  jwt.ClaimStrings{"shopeezy-cashier-app"},
 		},
 	}
 
@@ -67,35 +64,28 @@ func (s *jwtTokenService) ValidateToken(ctx context.Context, tokenString string)
 	})
 
 	if err != nil {
-		log.Printf("Failed to parse or validate JWT: %v", err)
 		return false, uuid.Nil, "", "", "Token invalid or expired", err
 	}
 
 	claims, ok := token.Claims.(*JWTClaims)
 	if !ok || !token.Valid {
-		log.Printf("Invalid token or claims mismatch: %v", err)
-		return false, uuid.Nil, "", "", "Invalid token", nil // No Go error, just invalid token
+		return false, uuid.Nil, "", "", "Invalid token", nil
 	}
 
-	// Check Redis Blacklist (if JTI exists)
-	jti := claims.ID // Unique JWT ID
-	if jti != "" {   // JTI might be empty if not set during token creation
+	jti := claims.ID
+	if jti != "" {
 		isBlacklisted, err := s.jwtBlacklistRepo.IsBlacklisted(ctx, jti)
 		if err != nil {
-			log.Printf("Error checking JWT blacklist for JTI %s: %v", jti, err)
 			return false, uuid.Nil, "", "", "Internal server error during token validation", err
 		}
 		if isBlacklisted {
-			log.Printf("Token with JTI %s is blacklisted.", jti)
-			return false, uuid.Nil, "", "", "Token has been revoked", nil // No Go error, just invalid token
+			return false, uuid.Nil, "", "", "Token has been revoked", nil
 		}
 	}
 
-	// Token is valid and not blacklisted
 	return true, claims.UserID, claims.Username, claims.Role, "", nil
 }
 
-// BlacklistToken adds a JWT ID (JTI) to the blacklist.
 func (s *jwtTokenService) BlacklistToken(ctx context.Context, jti string, expiration time.Duration) error {
 	return s.jwtBlacklistRepo.AddToBlacklist(ctx, jti, expiration)
 }

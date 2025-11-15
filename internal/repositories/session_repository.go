@@ -30,7 +30,7 @@ func (r *sessionRepository) StoreUserSession(ctx context.Context, token string, 
 	if err != nil {
 		return fmt.Errorf("failed to marshal user to JSON: %w", err)
 	}
-	// Use SETEX (Set with Expire) for automatic TTL
+
 	return r.redisClient.Client.SetEX(ctx, token, userJSON, duration).Err()
 }
 

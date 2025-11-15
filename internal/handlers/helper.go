@@ -31,7 +31,7 @@ func extractUserID(c echo.Context) (uuid.UUID, error) {
 
 	if val == nil {
 		log.Println("DEBUG: c.Get('userID') hasilnya nil.")
-		return uuid.Nil, errors.New("invalid user session: userID is nil in context") // Gunakan error yang lebih jelas
+		return uuid.Nil, errors.New("invalid user session: userID is nil in context")
 	}
 
 	if id, ok := val.(uuid.UUID); ok {
