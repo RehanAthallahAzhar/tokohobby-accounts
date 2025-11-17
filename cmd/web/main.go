@@ -132,6 +132,7 @@ func main() {
 		AllowOrigins: []string{
 			"http://localhost",
 			"http://localhost:5173",
+			"http://72.61.142.248",
 		},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
