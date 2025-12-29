@@ -13,13 +13,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/db"
-	apperrors "github.com/RehanAthallahAzhar/shopeezy-accounts/internal/pkg/errors"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/db"
+	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/entities"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/models"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/repositories"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services/token"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 )
 
 type UserSource interface {

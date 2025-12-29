@@ -1,9 +1,9 @@
 package routes
 
 import (
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/handlers"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/middlewares"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services/token"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/handlers"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/middlewares"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 	"github.com/labstack/echo/v4"
 )
 

@@ -13,28 +13,28 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/db"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/configs"
-	dbGenerated "github.com/RehanAthallahAzhar/shopeezy-accounts/internal/db"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/handlers"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/helpers"
-	customMiddleware "github.com/RehanAthallahAzhar/shopeezy-accounts/internal/middlewares" // Import middleware kita
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/models"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/pkg/logger"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/pkg/redisclient"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/repositories"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/routes"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services/token"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/db"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/configs"
+	dbGenerated "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/db"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/handlers"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/helpers"
+	customMiddleware "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/middlewares" // Import middleware kita
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/logger"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/redisclient"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/routes"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 
-	grpcServer "github.com/RehanAthallahAzhar/shopeezy-accounts/internal/grpc"
-	accountpb "github.com/RehanAthallahAzhar/shopeezy-protos/pb/account"
-	authpb "github.com/RehanAthallahAzhar/shopeezy-protos/pb/auth"
+	grpcServer "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/grpc"
+	accountpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/account"
+	authpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/auth"
 )
 
 func main() {

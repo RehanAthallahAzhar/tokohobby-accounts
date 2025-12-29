@@ -8,8 +8,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/entities"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/repositories"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
 )
 
 type JWTClaims struct {

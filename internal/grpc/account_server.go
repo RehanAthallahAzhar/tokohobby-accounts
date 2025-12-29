@@ -6,10 +6,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/helpers"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/helpers"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services"
 
-	accountpb "github.com/RehanAthallahAzhar/shopeezy-protos/pb/account"
+	accountpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/account"
 )
 
 type AccountServer struct {

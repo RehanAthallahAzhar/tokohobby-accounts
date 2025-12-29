@@ -7,14 +7,14 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/entities"
-	apperrors "github.com/RehanAthallahAzhar/shopeezy-accounts/internal/pkg/errors"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
+	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/helpers"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/models"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/repositories"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services/token"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/helpers"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 )
 
 type UserHandler struct {

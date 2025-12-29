@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/models"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services/token"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 
 	"github.com/labstack/echo/v4"
 )

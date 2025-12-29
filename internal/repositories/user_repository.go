@@ -6,8 +6,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/db"
-	apperrors "github.com/RehanAthallahAzhar/shopeezy-accounts/internal/pkg/errors"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/db"
+	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/google/uuid"
 )
 

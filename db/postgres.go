@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/models"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
 
 	_ "github.com/lib/pq"
 )

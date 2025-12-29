@@ -1,7 +1,7 @@
 package helpers
 
 import (
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/pkg/errors"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )

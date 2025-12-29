@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/entities"
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/pkg/redisclient"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/redisclient"
 	"github.com/go-redis/redis/v8"
 )
 

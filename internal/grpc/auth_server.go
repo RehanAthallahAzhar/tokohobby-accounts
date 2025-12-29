@@ -3,11 +3,11 @@ package grpc
 import (
 	"context"
 
-	authpb "github.com/RehanAthallahAzhar/shopeezy-protos/pb/auth"
+	authpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/auth"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/services/token"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 )
 
 type AuthServer struct {

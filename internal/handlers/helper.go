@@ -2,16 +2,15 @@ package handlers
 
 import (
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 
-	apperrors "github.com/RehanAthallahAzhar/shopeezy-accounts/internal/pkg/errors"
+	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/models"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
 )
 
 // ------- HELPERS -------
@@ -30,7 +29,6 @@ func extractUserID(c echo.Context) (uuid.UUID, error) {
 	val := c.Get("userID")
 
 	if val == nil {
-		log.Println("DEBUG: c.Get('userID') hasilnya nil.")
 		return uuid.Nil, errors.New("invalid user session: userID is nil in context")
 	}
 
@@ -38,7 +36,6 @@ func extractUserID(c echo.Context) (uuid.UUID, error) {
 		return id, nil
 	}
 
-	log.Printf("DEBUG: Gagal assertion ke uuid.UUID. Tipe data aktual adalah %T", val)
 	return uuid.Nil, errors.New("invalid user session: userID in context is not of type uuid.UUID")
 }
 

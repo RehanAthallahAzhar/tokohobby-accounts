@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/RehanAthallahAzhar/shopeezy-accounts/internal/configs"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/configs"
 	"github.com/go-redis/redis/v8"
 	"github.com/sirupsen/logrus"
 )
