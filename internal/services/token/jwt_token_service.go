@@ -21,29 +21,40 @@ type JWTClaims struct {
 
 type jwtTokenService struct {
 	jwtSecret        string
+	jwtIssuer        string
+	jwtAudience      []string
 	jwtBlacklistRepo repositories.JWTBlacklistRepository
 }
 
-func NewJWTTokenService(jwtSecret string, jwtBlacklistRepo repositories.JWTBlacklistRepository) TokenService {
+func NewJWTTokenService(jwtSecret, jwtIssuer string, jwtAudience []string, jwtBlacklistRepo repositories.JWTBlacklistRepository) TokenService {
 	return &jwtTokenService{
 		jwtSecret:        jwtSecret,
+		jwtIssuer:        jwtIssuer,
+		jwtAudience:      jwtAudience,
 		jwtBlacklistRepo: jwtBlacklistRepo,
 	}
 }
 
-func (s *jwtTokenService) GenerateToken(ctx context.Context, user *entities.User) (string, error) {
+type TokenService interface {
+	GenerateAccessToken(ctx context.Context, user *entities.User) (string, error)
+	GenerateRefreshToken(ctx context.Context) (string, error)
+	ValidateToken(ctx context.Context, tokenString string) (isValid bool, userID uuid.UUID, username string, role string, errorMessage string, err error)
+	BlacklistToken(ctx context.Context, jti string, expiration time.Duration) error
+}
+
+func (s *jwtTokenService) GenerateAccessToken(ctx context.Context, user *entities.User) (string, error) {
 	claims := &JWTClaims{
 		UserID:   user.ID,
 		Username: user.Username,
 		Role:     user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			ID:        uuid.New().String(),
-			Issuer:    "shopeezy-account-service",
+			Issuer:    s.jwtIssuer,
 			Subject:   user.Username,
-			Audience:  jwt.ClaimStrings{"shopeezy-cashier-app"},
+			Audience:  jwt.ClaimStrings(s.jwtAudience),
 		},
 	}
 
@@ -55,13 +66,19 @@ func (s *jwtTokenService) GenerateToken(ctx context.Context, user *entities.User
 	return signedToken, nil
 }
 
+func (s *jwtTokenService) GenerateRefreshToken(ctx context.Context) (string, error) {
+	// Gak perlu JWT aneh-aneh. Cukup string acak yang unik (UUID).
+	// Karena validasinya nanti kita cek langsung ke Redis, bukan cek signature cryptography.
+	return uuid.New().String(), nil
+}
+
 func (s *jwtTokenService) ValidateToken(ctx context.Context, tokenString string) (isValid bool, userID uuid.UUID, username string, role string, errorMessage string, err error) {
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(s.jwtSecret), nil
-	})
+	}, jwt.WithIssuer(s.jwtIssuer))
 
 	if err != nil {
 		return false, uuid.Nil, "", "", "Token invalid or expired", err

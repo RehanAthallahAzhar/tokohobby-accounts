@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -18,7 +19,6 @@ import (
 	dbGenerated "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/db"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/handlers"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/helpers"
-	customMiddleware "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/middlewares" // Import middleware kita
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/logger"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/redisclient"
@@ -33,6 +33,7 @@ import (
 	_ "github.com/lib/pq"
 
 	grpcServer "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/grpc"
+	customMiddleware "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/middlewares"
 	accountpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/account"
 	authpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/auth"
 )
@@ -42,8 +43,10 @@ func main() {
 
 	cfg, err := configs.LoadConfig(log)
 	if err != nil {
-		log.Fatalf("FATAL: Gagal memuat konfigurasi: %v", err)
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
+
+	logger.SetLevel(log, cfg.Logrus.Level)
 
 	dbCredential := models.Credential{
 		Host:         cfg.Database.Host,
@@ -100,11 +103,13 @@ func main() {
 	// Setup Repo
 	usersRepo := repositories.NewUserRepository(sqlcQueries, log)
 	jwtBlacklistRepo := repositories.NewJWTBlacklistRepository(redisClient)
+	refreshTokenRepo := repositories.NewRefreshTokenRepository(redisClient)
 
 	validate := validator.New()
 
 	// Setup Service
-	tokenService := token.NewJWTTokenService(cfg.Server.JWTSecret, jwtBlacklistRepo)
+	audiences := strings.Split(cfg.Server.JWTAudience, ",")
+	tokenService := token.NewJWTTokenService(cfg.Server.JWTSecret, cfg.Server.JWTIssuer, audiences, jwtBlacklistRepo)
 	userService := services.NewUserService(usersRepo, validate, tokenService, jwtBlacklistRepo, log)
 
 	// Setup gRPC
@@ -129,16 +134,12 @@ func main() {
 	e.Use(middleware.RequestID())
 	e.Use(customMiddleware.LoggingMiddleware(log))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{
-			"http://localhost",
-			"http://localhost:5173",
-			"http://72.61.142.248",
-		},
+		AllowOrigins: []string{"*"}, // Nginx will handle stricter CORS
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
 	}))
 	// Setup Route
-	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, log)
+	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, refreshTokenRepo, log)
 	routes.InitRoutes(e, handler, tokenService)
 
 	// Start Echo API REST Server (Block main goroutine)

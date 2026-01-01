@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/sirupsen/logrus"
 
@@ -22,6 +24,7 @@ type UserHandler struct {
 	UserService      services.UserService
 	TokenService     token.TokenService
 	JWTBlacklistRepo repositories.JWTBlacklistRepository
+	RefreshTokenRepo repositories.RefreshTokenRepository
 	log              *logrus.Logger
 }
 
@@ -30,6 +33,7 @@ func NewHandler(
 	userService services.UserService,
 	tokenService token.TokenService,
 	jwtBlacklistRepo repositories.JWTBlacklistRepository,
+	refreshTokenRepo repositories.RefreshTokenRepository,
 	log *logrus.Logger,
 ) *UserHandler {
 	return &UserHandler{
@@ -37,6 +41,7 @@ func NewHandler(
 		UserService:      userService,
 		TokenService:     tokenService,
 		JWTBlacklistRepo: jwtBlacklistRepo,
+		RefreshTokenRepo: refreshTokenRepo,
 		log:              log,
 	}
 }
@@ -70,16 +75,78 @@ func (h *UserHandler) Login(c echo.Context) error {
 		return h.handleServiceError(c, err)
 	}
 
-	signedToken, err := h.TokenService.GenerateToken(ctx, userSvc)
+	// 15 minutes access token
+	accessToken, err := h.TokenService.GenerateAccessToken(ctx, userSvc)
 	if err != nil {
-		h.log.WithError(err).Error("Failed to generate JWT")
+		h.log.WithError(err).Error("Failed to generate Access Token")
 		return respondError(c, http.StatusInternalServerError, apperrors.ErrFailedToGenerateToken)
 	}
 
+	// 7 days refresh token
+	refreshToken, err := h.TokenService.GenerateRefreshToken(ctx)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to generate Refresh Token")
+		return respondError(c, http.StatusInternalServerError, apperrors.ErrFailedToGenerateToken)
+	}
+
+	// Store Refresh Token in Redis (e.g. 7 days)
+	err = h.RefreshTokenRepo.StoreRefreshToken(ctx, userSvc.ID.String(), refreshToken, 7*24*time.Hour)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to store Refresh Token")
+		return respondError(c, http.StatusInternalServerError, fmt.Errorf("failed to create session"))
+	}
+
 	res := toUserResponse(userSvc)
-	res.Token = signedToken
+	res.Token = accessToken
+	res.RefreshToken = refreshToken
 
 	return respondSuccess(c, http.StatusOK, MsgLogin, res)
+}
+
+func (h *UserHandler) RefreshSession(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	var req models.RefreshTokenRequest
+	if err := c.Bind(&req); err != nil {
+		return respondError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+	}
+
+	userIDStr, err := h.RefreshTokenRepo.ValidateRefreshToken(ctx, req.RefreshToken)
+	if err != nil || userIDStr == "" {
+		h.log.Warnf("Invalid or expired refresh token attempt: %v", err)
+		return respondError(c, http.StatusUnauthorized, fmt.Errorf("invalid or expired refresh token"))
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		h.log.Errorf("Invalid user ID format in session: %v", err)
+		return respondError(c, http.StatusInternalServerError, fmt.Errorf("internal session error"))
+	}
+
+	userSvc, err := h.UserService.GetUserByID(ctx, userID)
+	if err != nil {
+		return respondError(c, http.StatusUnauthorized, fmt.Errorf("user not found"))
+	}
+
+	// Generate NEW Access Token
+	newAccessToken, err := h.TokenService.GenerateAccessToken(ctx, userSvc)
+	if err != nil {
+		h.log.WithError(err).Error("Failed to generate Access Token during refresh")
+		return respondError(c, http.StatusInternalServerError, apperrors.ErrFailedToGenerateToken)
+	}
+
+	// Generate NEW Refresh Token
+	newRefreshToken, _ := h.TokenService.GenerateRefreshToken(ctx)
+
+	// Revoke old Refresh Token
+	h.RefreshTokenRepo.RevokeRefreshToken(ctx, req.RefreshToken)
+
+	// Store new Refresh Token
+	h.RefreshTokenRepo.StoreRefreshToken(ctx, userIDStr, newRefreshToken, 7*24*time.Hour)
+
+	return respondSuccess(c, http.StatusOK, "Session refreshed", map[string]string{
+		"token": newAccessToken,
+	})
 }
 
 func (h *UserHandler) Logout(c echo.Context) error {
@@ -88,6 +155,19 @@ func (h *UserHandler) Logout(c echo.Context) error {
 	authHeader := c.Request().Header.Get("Authorization")
 	if authHeader == "" {
 		return respondError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+	}
+
+	// Optional: Revoke Refresh Token if provided in body?
+	// Since we can't extract Refresh Token from Access Token easily without DB lookup,
+	// Client *should* send the refresh token to revoke it.
+	// But standard logout often just kills access token.
+	// If the client deletes the refresh token on their side, it's effectively gone.
+	// Server-side revocation requires the client to send the refresh token to be blacklisted.
+
+	// Let's check if client sent Refresh Token in body for revocation
+	var req models.RefreshTokenRequest
+	if err := c.Bind(&req); err == nil && req.RefreshToken != "" {
+		_ = h.RefreshTokenRepo.RevokeRefreshToken(ctx, req.RefreshToken)
 	}
 
 	if err := h.UserService.Logout(ctx, authHeader); err != nil {

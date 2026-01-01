@@ -1,9 +1,11 @@
 package redisclient
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/configs"
 	"github.com/go-redis/redis/v8"
@@ -44,4 +46,18 @@ func (rc *RedisClient) Close() {
 			log.Printf("Gagal menutup koneksi Redis: %v", err)
 		}
 	}
+}
+
+// Wrapper methods for Redis operations
+
+func (rc *RedisClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	return rc.Client.Set(ctx, key, value, expiration).Err()
+}
+
+func (rc *RedisClient) Get(ctx context.Context, key string) (string, error) {
+	return rc.Client.Get(ctx, key).Result()
+}
+
+func (rc *RedisClient) Del(ctx context.Context, key string) error {
+	return rc.Client.Del(ctx, key).Err()
 }

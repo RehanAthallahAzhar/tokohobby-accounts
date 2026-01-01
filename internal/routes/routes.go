@@ -12,6 +12,7 @@ func InitRoutes(e *echo.Echo, api *handlers.UserHandler, tokenService token.Toke
 
 	e.POST("/api/v1/accounts/register", api.RegisterUser)
 	e.POST("/api/v1/accounts/login", api.Login)
+	e.POST("/api/v1/accounts/refresh", api.RefreshSession)
 	e.POST("/api/v1/accounts/logout", api.Logout)
 
 	jwtAuthMiddleware := middlewares.AuthMiddleware(middlewares.AuthMiddlewareOptions{

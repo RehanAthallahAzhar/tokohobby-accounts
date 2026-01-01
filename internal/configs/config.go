@@ -15,11 +15,12 @@ type AppConfig struct {
 	RabbitMQ  struct {
 		URL string `env:"RABBITMQ_URL,required"`
 	}
+	Logrus LogrusConfig
 }
 
 func LoadConfig(log *logrus.Logger) (*AppConfig, error) {
 	if err := godotenv.Load(); err != nil {
-		log.Warn("Peringatan: Gagal memuat file .env.")
+		log.Warn("Warn: Failed to load .env.")
 	}
 
 	cfg := &AppConfig{}
@@ -27,6 +28,6 @@ func LoadConfig(log *logrus.Logger) (*AppConfig, error) {
 		return nil, err
 	}
 
-	log.Info("Konfigurasi terstruktur berhasil dimuat.")
+	log.Info("Configuration loaded successfully.")
 	return cfg, nil
 }

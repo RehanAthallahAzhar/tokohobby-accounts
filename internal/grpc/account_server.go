@@ -24,12 +24,12 @@ func NewAccountServer(userService services.UserService) *AccountServer {
 func (s *AccountServer) GetUser(ctx context.Context, req *accountpb.GetUserRequest) (*accountpb.User, error) {
 	userID := req.GetId()
 	if userID == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "user ID cannot be empty")
+		return nil, status.Errorf(codes.InvalidArgument, "userID cannot be empty")
 	}
 
 	uuid, err := helpers.StringToUUID(userID)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid user ID format")
+		return nil, status.Errorf(codes.InvalidArgument, "invalid userID format")
 	}
 
 	user, err := s.UserService.GetUserByID(ctx, uuid)
