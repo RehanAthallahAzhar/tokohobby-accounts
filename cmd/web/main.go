@@ -36,6 +36,9 @@ import (
 	customMiddleware "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/middlewares"
 	accountpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/account"
 	authpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/auth"
+
+	accountMsg "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging"
+	messaging "github.com/RehanAthallahAzhar/tokohobby-messaging-go"
 )
 
 func main() {
@@ -100,6 +103,21 @@ func main() {
 	}
 	defer redisClient.Close()
 
+	// Initialize RabbitMQ
+	rmqConfig := messaging.DefaultConfig()
+	rmq, err := messaging.NewRabbitMQ(rmqConfig)
+	if err != nil {
+		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+	}
+	defer rmq.Close()
+	// Setup exchange
+	if err := messaging.SetupUserExchange(rmq); err != nil {
+		log.Fatalf("Failed to setup user exchange: %v", err)
+	}
+
+	// Create event publisher
+	eventPublisher := accountMsg.NewEventPublisher(rmq, log)
+
 	// Setup Repo
 	usersRepo := repositories.NewUserRepository(sqlcQueries, log)
 	jwtBlacklistRepo := repositories.NewJWTBlacklistRepository(redisClient)
@@ -111,6 +129,9 @@ func main() {
 	audiences := strings.Split(cfg.Server.JWTAudience, ",")
 	tokenService := token.NewJWTTokenService(cfg.Server.JWTSecret, cfg.Server.JWTIssuer, audiences, jwtBlacklistRepo)
 	userService := services.NewUserService(usersRepo, validate, tokenService, jwtBlacklistRepo, log)
+
+	// Setup Handler
+	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, refreshTokenRepo, eventPublisher, log)
 
 	// Setup gRPC
 	lis, err := net.Listen("tcp", ":"+cfg.Server.GRPCPort)
@@ -138,8 +159,8 @@ func main() {
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
 	}))
+
 	// Setup Route
-	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, refreshTokenRepo, log)
 	routes.InitRoutes(e, handler, tokenService)
 
 	// Start Echo API REST Server (Block main goroutine)

@@ -1,15 +1,18 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging"
 	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/helpers"
@@ -25,6 +28,7 @@ type UserHandler struct {
 	TokenService     token.TokenService
 	JWTBlacklistRepo repositories.JWTBlacklistRepository
 	RefreshTokenRepo repositories.RefreshTokenRepository
+	EventPublisher   *messaging.EventPublisher
 	log              *logrus.Logger
 }
 
@@ -34,6 +38,7 @@ func NewHandler(
 	tokenService token.TokenService,
 	jwtBlacklistRepo repositories.JWTBlacklistRepository,
 	refreshTokenRepo repositories.RefreshTokenRepository,
+	eventPublisher *messaging.EventPublisher,
 	log *logrus.Logger,
 ) *UserHandler {
 	return &UserHandler{
@@ -42,6 +47,7 @@ func NewHandler(
 		TokenService:     tokenService,
 		JWTBlacklistRepo: jwtBlacklistRepo,
 		RefreshTokenRepo: refreshTokenRepo,
+		EventPublisher:   eventPublisher,
 		log:              log,
 	}
 }
@@ -58,6 +64,21 @@ func (h *UserHandler) RegisterUser(c echo.Context) error {
 	if err != nil {
 		return h.handleServiceError(c, err)
 	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		event := messaging.UserRegisteredEvent{
+			UserID:    userSvc.ID.String(),
+			Email:     userSvc.Email,
+			Username:  userSvc.Username,
+			CreatedAt: time.Now(),
+		}
+		if err := h.EventPublisher.PublishUserRegistered(ctx, event); err != nil {
+			log.Errorf("Failed to publish user registered event: %v", err)
+			// Don't fail the registration if event publish fails
+		}
+	}()
 
 	return respondSuccess(c, http.StatusCreated, MsgUserCreated, toUserResponse(userSvc))
 }
