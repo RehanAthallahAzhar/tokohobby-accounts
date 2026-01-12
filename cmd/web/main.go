@@ -104,7 +104,13 @@ func main() {
 	defer redisClient.Close()
 
 	// Initialize RabbitMQ
-	rmqConfig := messaging.DefaultConfig()
+	rmqConfig := &messaging.RabbitMQConfig{
+		URL:            cfg.RabbitMQ.URL,
+		MaxRetries:     cfg.RabbitMQ.MaxRetries,
+		RetryDelay:     cfg.RabbitMQ.RetryDelay,
+		PrefetchCount:  cfg.RabbitMQ.PrefetchCount,
+		ReconnectDelay: cfg.RabbitMQ.ReconnectDelay,
+	}
 	rmq, err := messaging.NewRabbitMQ(rmqConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)

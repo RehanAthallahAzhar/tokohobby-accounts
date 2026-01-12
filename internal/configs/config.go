@@ -12,10 +12,8 @@ type AppConfig struct {
 	Redis     RedisConfig
 	GRPC      GrpcConfig
 	Server    ServerConfig
-	RabbitMQ  struct {
-		URL string `env:"RABBITMQ_URL,required"`
-	}
-	Logrus LogrusConfig
+	RabbitMQ  RabbitMQConfig
+	Logrus    LogrusConfig
 }
 
 func LoadConfig(log *logrus.Logger) (*AppConfig, error) {
