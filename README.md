@@ -14,11 +14,11 @@ User authentication and account management microservice.
 ## API Endpoints
 
 ### REST
-- `POST /api/v1/register` - Register new user
-- `POST /api/v1/login` - Login
-- `POST /api/v1/refresh` - Refresh token
-- `POST /api/v1/logout` - Logout
-- `GET /api/v1/profile` - Get user profile
+- `POST /api/register` - Register new user
+- `POST /api/login` - Login
+- `POST /api/refresh` - Refresh token
+- `POST /api/logout` - Logout
+- `GET /api/profile` - Get user profile
 
 ### gRPC
 - `ValidateToken` - Validate JWT token

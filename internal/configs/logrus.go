@@ -1,5 +1,5 @@
 package configs
 
 type LogrusConfig struct {
-	Level string `env:"LOGRUS_LEVEL,required"`
+	Level string `env:"LOG_LEVEL,required"`
 }

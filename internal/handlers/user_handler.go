@@ -209,7 +209,7 @@ func (h *UserHandler) GetAllUsers(c echo.Context) error {
 	return respondSuccess(c, http.StatusOK, MsgUsersRetrieved, toUserResponses(res))
 }
 
-func (h *UserHandler) GetUserById(c echo.Context) error {
+func (h *UserHandler) GetUserByID(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	id, err := extractUserID(c)

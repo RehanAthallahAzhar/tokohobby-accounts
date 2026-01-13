@@ -49,8 +49,6 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	logger.SetLevel(log, cfg.Logrus.Level)
-
 	dbCredential := models.Credential{
 		Host:         cfg.Database.Host,
 		Username:     cfg.Database.User,
