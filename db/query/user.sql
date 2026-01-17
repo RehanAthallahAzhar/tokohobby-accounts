@@ -30,6 +30,12 @@ SELECT id, "name", username, email, "password",phone_number, "address", "role", 
 FROM users
 WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL;
 
+-- name: ExistUsernameorEmail :one
+SELECT username, email
+FROM users
+WHERE (username = $1 OR email = $2) AND deleted_at IS NULL
+LIMIT 1;
+
 -- name: UpdateUser :one
 UPDATE users
 SET

@@ -16,6 +16,8 @@ var (
 	ErrTokenNotFound         = errors.New("token not found")
 	ErrInvalidCredentials    = errors.New("invalid credentials")
 	ErrUserAlreadyExists     = errors.New("user already exists")
+	ErrUsernameAlreadyExists = errors.New("username already exists")
+	ErrEmailAlreadyExists    = errors.New("email already exists")
 	ErrNotFound              = errors.New("not found")
 	ErrForbidden             = errors.New("forbidden")
 
@@ -29,6 +31,18 @@ var (
 
 	ErrProductOutOfStock = errors.New("product out of stock")
 )
+
+type ValidationError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+type ValidationErrors struct {
+	Errors []ValidationError `json:"errors"`
+}
+
+func (e ValidationErrors) Error() string {
+	return "validation failed"
+}
 
 /*
 

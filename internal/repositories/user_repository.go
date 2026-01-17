@@ -19,6 +19,7 @@ type UserRepository interface {
 	GetUserByIDs(ctx context.Context, id []uuid.UUID) ([]db.GetUserByIDsRow, error)
 	UpdateUser(ctx context.Context, param *db.UpdateUserParams) (*db.User, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) (*db.User, error)
+	ExistUsernameorEmail(ctx context.Context, username string, email string) (*db.ExistUsernameorEmailRow, error)
 }
 
 type userRepository struct {
@@ -110,6 +111,15 @@ func (u *userRepository) DeleteUser(ctx context.Context, id uuid.UUID) (*db.User
 	res, err := u.db.DeleteUser(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	return &res, nil
+}
+
+func (u *userRepository) ExistUsernameorEmail(ctx context.Context, username string, email string) (*db.ExistUsernameorEmailRow, error) {
+	res, err := u.db.ExistUsernameorEmail(ctx, db.ExistUsernameorEmailParams{Username: username, Email: email})
+	if err != nil {
+		return nil, fmt.Errorf("failed to check duplicate username and email: %w", err)
 	}
 
 	return &res, nil

@@ -53,6 +53,12 @@ func respondError(c echo.Context, status int, err error) error {
 }
 
 func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
+	// Check for structured validation errors (field-level)
+	var validationErrs apperrors.ValidationErrors
+	if errors.As(err, &validationErrs) {
+		return c.JSON(http.StatusBadRequest, validationErrs)
+	}
+
 	// validation error
 	if errors.Is(err, apperrors.ErrInvalidRequestPayload) {
 		return respondError(c, http.StatusBadRequest, err)
@@ -76,6 +82,12 @@ func (h *UserHandler) handleServiceError(c echo.Context, err error) error {
 
 	// Data Conflict
 	if errors.Is(err, apperrors.ErrUserAlreadyExists) {
+		return respondError(c, http.StatusConflict, err)
+	}
+	if errors.Is(err, apperrors.ErrUsernameAlreadyExists) {
+		return respondError(c, http.StatusConflict, err)
+	}
+	if errors.Is(err, apperrors.ErrEmailAlreadyExists) {
 		return respondError(c, http.StatusConflict, err)
 	}
 

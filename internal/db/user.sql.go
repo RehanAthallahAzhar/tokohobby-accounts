@@ -90,6 +90,30 @@ func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
+const existUsernameorEmail = `-- name: ExistUsernameorEmail :one
+SELECT username, email
+FROM users
+WHERE (username = $1 OR email = $2) AND deleted_at IS NULL
+LIMIT 1
+`
+
+type ExistUsernameorEmailParams struct {
+	Username string
+	Email    string
+}
+
+type ExistUsernameorEmailRow struct {
+	Username string
+	Email    string
+}
+
+func (q *Queries) ExistUsernameorEmail(ctx context.Context, arg ExistUsernameorEmailParams) (ExistUsernameorEmailRow, error) {
+	row := q.db.QueryRowContext(ctx, existUsernameorEmail, arg.Username, arg.Email)
+	var i ExistUsernameorEmailRow
+	err := row.Scan(&i.Username, &i.Email)
+	return i, err
+}
+
 const getAllUsers = `-- name: GetAllUsers :many
 SELECT id, "name", username, email, "password",phone_number, "address", "role", created_at, updated_at
 FROM users

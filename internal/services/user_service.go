@@ -18,6 +18,7 @@ import (
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 )
@@ -26,7 +27,8 @@ type UserSource interface {
 	db.GetAllUsersRow |
 		db.GetUserByIDRow |
 		db.GetUserByIDsRow |
-		db.User
+		db.User |
+		db.GetUserByUsernameRow
 }
 
 type UserService interface {
@@ -65,26 +67,48 @@ func NewUserService(
 }
 
 func (s *UserServiceImpl) Register(ctx context.Context, req *models.UserRegisterRequest) (*entities.User, error) {
-	var user *entities.User
-
 	if err := s.validator.Struct(req); err != nil {
-		validationErrors := err.(validator.ValidationErrors)
+		fieldErrors := err.(validator.ValidationErrors)
 
 		var errorMessages []string
-		for _, fieldErr := range validationErrors {
+		for _, fieldErr := range fieldErrors {
 			errorMessages = append(errorMessages, fmt.Sprintf("Field '%s' failed on the '%s' tag", fieldErr.Field(), fieldErr.Tag()))
 		}
 
-		return nil, fmt.Errorf("%w: %s", apperrors.ErrInvalidRequestPayload, strings.Join(errorMessages, ", "))
+		return nil, fmt.Errorf("validation failed: %s", strings.Join(errorMessages, ", "))
 	}
 
+	var validationErrors []errors.ValidationError
+
+	// Check for duplicate username & email
+	existingUser, err := s.userRepo.ExistUsernameorEmail(ctx, req.Username, req.Email)
+	if err == nil && existingUser != nil {
+		if existingUser.Username == req.Username {
+			validationErrors = append(validationErrors, errors.ValidationError{
+				Field:   "username",
+				Message: "username already exists",
+			})
+		}
+		if existingUser.Email == req.Email {
+			validationErrors = append(validationErrors, errors.ValidationError{
+				Field:   "email",
+				Message: "email already exists",
+			})
+		}
+	}
+
+	// check role
 	if req.Role == "" {
 		req.Role = "user"
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("service: Failed to register user: %w", err)
+		return nil, fmt.Errorf("failed to generate password hash: %w", err)
+	}
+
+	if len(validationErrors) > 0 {
+		return nil, apperrors.ValidationErrors{Errors: validationErrors}
 	}
 
 	dbParam := &db.CreateUserParams{
@@ -103,23 +127,10 @@ func (s *UserServiceImpl) Register(ctx context.Context, req *models.UserRegister
 		return nil, fmt.Errorf("service: failed to register user: %w", err)
 	}
 
-	user = &entities.User{
-		ID:        userDB.ID,
-		Name:      userDB.Name,
-		Username:  userDB.Username,
-		Email:     userDB.Email,
-		Role:      userDB.Role,
-		Address:   userDB.Address,
-		CreatedAt: userDB.CreatedAt,
-		UpdatedAt: userDB.UpdatedAt,
-	}
-
-	return user, nil
+	return toDomainUser(userDB), nil
 }
 
 func (s *UserServiceImpl) Login(ctx context.Context, req *models.UserLoginRequest) (*entities.User, error) {
-	var user *entities.User
-
 	userDB, err := s.userRepo.GetUserByUsername(ctx, req.Username)
 	if err != nil {
 		s.log.WithError(err).Error("Failed to retrieve user by username from the database")
@@ -132,19 +143,7 @@ func (s *UserServiceImpl) Login(ctx context.Context, req *models.UserLoginReques
 		return nil, apperrors.ErrInvalidCredentials
 	}
 
-	user = &entities.User{
-		ID:          userDB.ID,
-		Name:        userDB.Name,
-		Username:    userDB.Username,
-		Email:       userDB.Email,
-		Role:        userDB.Role,
-		Address:     userDB.Address,
-		PhoneNumber: userDB.PhoneNumber,
-		CreatedAt:   userDB.CreatedAt,
-		UpdatedAt:   userDB.UpdatedAt,
-	}
-
-	return user, nil
+	return toDomainUser(userDB), nil
 }
 
 func (s *UserServiceImpl) Logout(ctx context.Context, authHeader string) error {
