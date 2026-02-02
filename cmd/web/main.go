@@ -33,12 +33,13 @@ import (
 	_ "github.com/lib/pq"
 
 	grpcServer "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/grpc"
-	customMiddleware "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/middlewares"
+	middlewareApp "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/middlewares"
 	accountpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/account"
 	authpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/auth"
 
-	accountMsg "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging"
-	messaging "github.com/RehanAthallahAzhar/tokohobby-messaging-go"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
+	"github.com/RehanAthallahAzhar/tokohobby-messaging/kafka"
+	rabbitmqpkg "github.com/RehanAthallahAzhar/tokohobby-messaging/rabbitmq"
 )
 
 func main() {
@@ -102,25 +103,36 @@ func main() {
 	defer redisClient.Close()
 
 	// Initialize RabbitMQ
-	rmqConfig := &messaging.RabbitMQConfig{
+	rmqConfig := &rabbitmqpkg.RabbitMQConfig{
 		URL:            cfg.RabbitMQ.URL,
 		MaxRetries:     cfg.RabbitMQ.MaxRetries,
 		RetryDelay:     cfg.RabbitMQ.RetryDelay,
 		PrefetchCount:  cfg.RabbitMQ.PrefetchCount,
 		ReconnectDelay: cfg.RabbitMQ.ReconnectDelay,
 	}
-	rmq, err := messaging.NewRabbitMQ(rmqConfig)
+	rmq, err := rabbitmqpkg.NewRabbitMQ(rmqConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}
 	defer rmq.Close()
 	// Setup exchange
-	if err := messaging.SetupUserExchange(rmq); err != nil {
+	if err := rabbitmqpkg.SetupUserExchange(rmq); err != nil {
 		log.Fatalf("Failed to setup user exchange: %v", err)
 	}
 
-	// Create event publisher
-	eventPublisher := accountMsg.NewEventPublisher(rmq, log)
+	// Create event publisher (RabbitMQ)
+	eventPublisher := rabbitmq.NewEventPublisher(rmq, log)
+
+	// Initialize Kafka producer for user activity tracking
+	var kafkaProducer *kafka.ActivityProducer
+	if cfg.Kafka.Brokers != "" {
+		kafkaBrokers := strings.Split(cfg.Kafka.Brokers, ",")
+		kafkaProducer = kafka.NewActivityProducer(kafkaBrokers)
+		defer kafkaProducer.Close()
+		log.Infof("Kafka producer initialized for brokers: %v", kafkaBrokers)
+	} else {
+		log.Warn("Kafka brokers not configured, user activity tracking disabled")
+	}
 
 	// Setup Repo
 	usersRepo := repositories.NewUserRepository(sqlcQueries, log)
@@ -132,10 +144,10 @@ func main() {
 	// Setup Service
 	audiences := strings.Split(cfg.Server.JWTAudience, ",")
 	tokenService := token.NewJWTTokenService(cfg.Server.JWTSecret, cfg.Server.JWTIssuer, audiences, jwtBlacklistRepo)
-	userService := services.NewUserService(usersRepo, validate, tokenService, jwtBlacklistRepo, log)
+	userService := services.NewUserService(usersRepo, validate, tokenService, jwtBlacklistRepo, eventPublisher, kafkaProducer, log)
 
 	// Setup Handler
-	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, refreshTokenRepo, eventPublisher, log)
+	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, refreshTokenRepo, log)
 
 	// Setup gRPC
 	lis, err := net.Listen("tcp", ":"+cfg.Server.GRPCPort)
@@ -157,7 +169,7 @@ func main() {
 	e := echo.New()
 
 	e.Use(middleware.RequestID())
-	e.Use(customMiddleware.LoggingMiddleware(log))
+	e.Use(middlewareApp.LoggingMiddleware(log))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"}, // Nginx will handle stricter CORS
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},

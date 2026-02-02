@@ -13,6 +13,7 @@ type AppConfig struct {
 	GRPC      GrpcConfig
 	Server    ServerConfig
 	RabbitMQ  RabbitMQConfig
+	Kafka     KafkaConfig
 	Logrus    LogrusConfig
 }
 

@@ -3,21 +3,18 @@ FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-# Pertama, hanya copy file go.mod dan go.sum
-COPY go.mod go.sum ./
+# Copy local dependencies first (messaging and protos)
+COPY messaging /app/messaging
+COPY protos /app/protos
 
-# Ini akan mengambil semua dependensi
-# berdasarkan go.mod dan memvalidasinya di dalam lingkungan Linux.
+# Copy accounts service
+COPY accounts /app/accounts
+WORKDIR /app/accounts
+
+# Download dependencies (will use local messaging & protos via replace directives)
 RUN go mod download
 
-# Sekarang, copy sisa kode aplikasi Anda
-COPY . .
-
-# Ini akan membuat file go.sum yang 100% valid untuk lingkungan build Linux.
-# Langkah ini memastikan tidak ada ketidakcocokan checksum dari mesin Windows Anda.
-RUN go mod tidy
-
-# Build aplikasi. Go sekarang akan memiliki semua yang dibutuhkannya.
+# Build aplikasi
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./cmd/web/main.go
 
 
@@ -30,7 +27,7 @@ WORKDIR /app
 COPY --from=builder /app/server .
 
 # Copy folder migrasi dari stage 'builder' ke stage final
-COPY --from=builder /app/db/migrations ./db/migrations
+COPY --from=builder /app/accounts/db/migrations ./db/migrations
 
 # Expose port yang digunakan oleh aplikasi Anda di dalam container
 EXPOSE 8080

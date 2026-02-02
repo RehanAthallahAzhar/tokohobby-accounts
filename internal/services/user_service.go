@@ -10,11 +10,14 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/db"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
 	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
+	"github.com/RehanAthallahAzhar/tokohobby-messaging/kafka"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
@@ -22,6 +25,13 @@ import (
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 )
+
+// ActivityMetadata contains HTTP request metadata for activity tracking
+type ActivityMetadata struct {
+	SessionID string
+	IPAddress string
+	UserAgent string
+}
 
 type UserSource interface {
 	db.GetAllUsersRow |
@@ -33,7 +43,7 @@ type UserSource interface {
 
 type UserService interface {
 	Register(ctx context.Context, req *models.UserRegisterRequest) (*entities.User, error)
-	Login(ctx context.Context, req *models.UserLoginRequest) (*entities.User, error)
+	Login(ctx context.Context, req *models.UserLoginRequest, metadata *ActivityMetadata) (*entities.User, error)
 	Logout(ctx context.Context, authHeader string) error
 	GetAllUsers(ctx context.Context) ([]entities.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*entities.User, error)
@@ -47,6 +57,8 @@ type UserServiceImpl struct {
 	validator        *validator.Validate
 	tokenService     token.TokenService
 	JWTBlacklistRepo repositories.JWTBlacklistRepository
+	eventPublisher   *rabbitmq.EventPublisher
+	kafkaProducer    *kafka.ActivityProducer
 	log              *logrus.Logger
 }
 
@@ -55,6 +67,8 @@ func NewUserService(
 	validator *validator.Validate,
 	tokenService token.TokenService,
 	JWTBlacklistRepo repositories.JWTBlacklistRepository,
+	eventPublisher *rabbitmq.EventPublisher,
+	kafkaProducer *kafka.ActivityProducer,
 	log *logrus.Logger,
 ) UserService {
 	return &UserServiceImpl{
@@ -62,6 +76,8 @@ func NewUserService(
 		validator:        validator,
 		tokenService:     tokenService,
 		JWTBlacklistRepo: JWTBlacklistRepo,
+		eventPublisher:   eventPublisher,
+		kafkaProducer:    kafkaProducer,
 		log:              log,
 	}
 }
@@ -127,10 +143,26 @@ func (s *UserServiceImpl) Register(ctx context.Context, req *models.UserRegister
 		return nil, fmt.Errorf("service: failed to register user: %w", err)
 	}
 
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		event := rabbitmq.UserRegisteredEvent{
+			UserID:    userDB.ID.String(),
+			Email:     userDB.Email,
+			Username:  userDB.Username,
+			CreatedAt: time.Now(),
+		}
+		if err := s.eventPublisher.PublishUserRegistered(ctx, event); err != nil {
+			log.Errorf("Failed to publish user registered event: %v", err)
+			// Don't fail the registration if event publish fails
+		}
+	}()
+
 	return toDomainUser(userDB), nil
 }
 
-func (s *UserServiceImpl) Login(ctx context.Context, req *models.UserLoginRequest) (*entities.User, error) {
+func (s *UserServiceImpl) Login(ctx context.Context, req *models.UserLoginRequest, metadata *ActivityMetadata) (*entities.User, error) {
 	userDB, err := s.userRepo.GetUserByUsername(ctx, req.Username)
 	if err != nil {
 		s.log.WithError(err).Error("Failed to retrieve user by username from the database")
@@ -143,7 +175,33 @@ func (s *UserServiceImpl) Login(ctx context.Context, req *models.UserLoginReques
 		return nil, apperrors.ErrInvalidCredentials
 	}
 
-	return toDomainUser(userDB), nil
+	user := toDomainUser(userDB)
+
+	// Track login activity to Kafka (async, non-blocking)
+	if s.kafkaProducer != nil && metadata != nil {
+		go func() {
+			userIDStr := user.ID.String()
+			sessionID := metadata.SessionID
+			if sessionID == "" {
+				sessionID = "no-session"
+			}
+
+			if err := s.kafkaProducer.PublishActivity(context.Background(), &kafka.UserActivityEvent{
+				EventType: "LOGIN",
+				UserID:    &userIDStr,
+				SessionID: sessionID,
+				Metadata: map[string]interface{}{
+					"ip_address": metadata.IPAddress,
+					"user_agent": metadata.UserAgent,
+					"username":   user.Username,
+				},
+			}); err != nil {
+				s.log.WithError(err).Error("Failed to publish login activity to Kafka")
+			}
+		}()
+	}
+
+	return user, nil
 }
 
 func (s *UserServiceImpl) Logout(ctx context.Context, authHeader string) error {

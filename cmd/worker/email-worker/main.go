@@ -8,57 +8,66 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/labstack/gommon/log"
 	"github.com/sirupsen/logrus"
 
-	accountsMsg "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging"
-	messaging "github.com/RehanAthallahAzhar/tokohobby-messaging-go"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/configs"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/logger"
+	rabbitmqpkg "github.com/RehanAthallahAzhar/tokohobby-messaging/rabbitmq"
 )
 
 func main() {
-	logrus.SetFormatter(&logrus.JSONFormatter{
+
+	log := logger.NewLogger()
+	log.SetFormatter(&logrus.JSONFormatter{
 		TimestampFormat: time.RFC3339,
 	})
-	logrus.SetOutput(os.Stdout)
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetOutput(os.Stdout)
+	log.SetLevel(logrus.InfoLevel)
 
-	logrus.Info("Starting Email Worker")
+	log.Info("Starting Email Worker")
 	// RabbitMQ configuration from environment
-	rmqURL := getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/tokohobby")
 
-	rmqConfig := &messaging.RabbitMQConfig{
-		URL:            rmqURL,
-		MaxRetries:     3,
-		RetryDelay:     5 * time.Second,
-		PrefetchCount:  5,
-		ReconnectDelay: 10 * time.Second,
+	cfg, err := configs.LoadConfig(log)
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	logrus.Infof("Connecting to RabbitMQ: %s", rmqURL)
+	rmqConfig := &rabbitmqpkg.RabbitMQConfig{
+		URL:            cfg.RabbitMQ.URL,
+		MaxRetries:     cfg.RabbitMQ.MaxRetries,
+		RetryDelay:     cfg.RabbitMQ.RetryDelay,
+		PrefetchCount:  cfg.RabbitMQ.PrefetchCount,
+		ReconnectDelay: cfg.RabbitMQ.ReconnectDelay,
+	}
+
+	log.Infof("Connecting to RabbitMQ: %s", cfg.RabbitMQ.URL)
 
 	// Connect to RabbitMQ
-	rmq, err := messaging.NewRabbitMQ(rmqConfig)
+	rmq, err := rabbitmqpkg.NewRabbitMQ(rmqConfig)
 	if err != nil {
-		logrus.Fatalf("❌ Failed to connect to RabbitMQ: %v", err)
+		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}
 	defer rmq.Close()
 
-	logrus.Info("Connected to RabbitMQ successfully")
+	log.Info("Connected to RabbitMQ successfully")
 
 	// Setup user exchange (ensure it exists)
-	if err := messaging.SetupUserExchange(rmq); err != nil {
-		logrus.Fatalf("Failed to setup user exchange: %v", err)
+	if err := rabbitmqpkg.SetupUserExchange(rmq); err != nil {
+		log.Fatalf("Failed to setup user exchange: %v", err)
 	}
 
-	logrus.Info("User exchange setup complete")
+	log.Info("User exchange setup complete")
 
 	// Create email service
 	emailService := NewEmailService()
 
 	// Create message handler
 	handler := func(ctx context.Context, body []byte) error {
-		var event accountsMsg.UserRegisteredEvent
+		var event rabbitmq.UserRegisteredEvent
 
-		if err := messaging.UnmarshalMessage(body, &event); err != nil {
+		if err := rabbitmqpkg.UnmarshalMessage(body, &event); err != nil {
 			return fmt.Errorf("failed to unmarshal: %w", err)
 		}
 
@@ -70,27 +79,27 @@ func main() {
 	}
 
 	// Create consumer with options
-	consumerOpts := messaging.ConsumerOptions{
+	consumerOpts := rabbitmqpkg.ConsumerOptions{
 		QueueName:   "email.user.welcome",
 		WorkerCount: 3, // 3 concurrent workers
 		AutoAck:     false,
 	}
 
-	consumer := messaging.NewConsumer(rmq, consumerOpts, handler)
+	consumer := rabbitmqpkg.NewConsumer(rmq, consumerOpts, handler)
 
 	// Declare queue
 	if err := consumer.DeclareQueue(true, false); err != nil {
-		logrus.Fatalf("Failed to declare queue: %v", err)
+		log.Fatalf("Failed to declare queue: %v", err)
 	}
 
-	logrus.Info("Queue declared: email.user.welcome")
+	log.Info("Queue declared: email.user.welcome")
 
 	// Bind queue to exchange
 	if err := consumer.BindQueue("user.events", "user.registered"); err != nil {
-		logrus.Fatalf("Failed to bind queue: %v", err)
+		log.Fatalf("Failed to bind queue: %v", err)
 	}
 
-	logrus.Info("Queue bound to exchange: user.events (routing key: user.registered)")
+	log.Info("Queue bound to exchange: user.events (routing key: user.registered)")
 
 	// Start consuming with context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -99,24 +108,24 @@ func main() {
 	// Start consumer in goroutine
 	go func() {
 		if err := consumer.Start(ctx); err != nil {
-			logrus.Warnf("Consumer error: %v", err)
+			log.Warnf("Consumer error: %v", err)
 		}
 	}()
 
-	logrus.Info("Email worker is running. Waiting for messages... (Press Ctrl+C to exit)")
+	log.Info("Email worker is running. Waiting for messages... (Press Ctrl+C to exit)")
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logrus.Info("Shutting down email worker...")
+	log.Info("Shutting down email worker...")
 	cancel() // Cancel context to stop consumer
 
 	// Give workers time to finish processing
 	time.Sleep(2 * time.Second)
 
-	logrus.Info("Email worker stopped gracefully")
+	log.Info("Email worker stopped gracefully")
 }
 
 // EmailService handles email sending logic
@@ -130,10 +139,10 @@ func (s *EmailService) SendWelcomeEmail(email, username, userID string) error {
 	// TODO: Implement actual SMTP email sending
 	// For now, just log the email
 
-	logrus.Infof("[📨 EMAIL] Sending welcome email to: %s", email)
-	logrus.Infof("   To: %s", email)
-	logrus.Infof("   Username: %s", username)
-	logrus.Infof("   User ID: %s", userID)
+	log.Infof("[📨 EMAIL] Sending welcome email to: %s", email)
+	log.Infof("   To: %s", email)
+	log.Infof("   Username: %s", username)
+	log.Infof("   User ID: %s", userID)
 
 	// Simulate email sending delay
 	time.Sleep(500 * time.Millisecond)
@@ -191,12 +200,4 @@ func (s *EmailService) SendWelcomeEmail(email, username, userID string) error {
 
 	logrus.Infof("[MOCK] Welcome email sent to %s", username)
 	return nil
-}
-
-// getEnv gets environment variable with default fallback
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }
