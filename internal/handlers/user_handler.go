@@ -157,7 +157,8 @@ func (h *UserHandler) RefreshSession(c echo.Context) error {
 	h.RefreshTokenRepo.StoreRefreshToken(ctx, userIDStr, newRefreshToken, 7*24*time.Hour)
 
 	return respondSuccess(c, http.StatusOK, "Session refreshed", map[string]string{
-		"token": newAccessToken,
+		"token":         newAccessToken,
+		"refresh_token": newRefreshToken,
 	})
 }
 
