@@ -3,8 +3,6 @@ package redisclient
 import (
 	"context"
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/configs"
@@ -18,24 +16,20 @@ type RedisClient struct {
 }
 
 func NewRedisClient(cfg *configs.RedisConfig, log *logrus.Logger) (*RedisClient, error) {
-	redisHost := os.Getenv("REDIS_HOST")
-	if redisHost == "" {
-		redisHost = "localhost"
-	}
-
-	redisPort := os.Getenv("REDIS_PORT")
-	if redisPort == "" {
-		redisPort = "6379"
-	}
-
-	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
-
+	redisAddr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     redisAddr,
 		Password: cfg.Password,
 		DB:       cfg.DB,
 	})
 
+	// Ping (Fail-Fast)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("failed to connect/ping redis at %s: %w", redisAddr, err)
+	}
+	log.Infof("Connected to Redis successfully at %s", redisAddr)
 	return &RedisClient{Client: rdb, log: log}, nil
 }
 
@@ -43,12 +37,12 @@ func (rc *RedisClient) Close() {
 	if rc.Client != nil {
 		err := rc.Client.Close()
 		if err != nil {
-			log.Printf("Gagal menutup koneksi Redis: %v", err)
+			rc.log.WithError(err).Error("Failed to close redis connection")
+			return
 		}
+		rc.log.Info("Redis connection closed successfully")
 	}
 }
-
-// Wrapper methods for Redis operations
 
 func (rc *RedisClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	return rc.Client.Set(ctx, key, value, expiration).Err()

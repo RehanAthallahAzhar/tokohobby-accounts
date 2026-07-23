@@ -20,3 +20,5 @@
 # Logs
 *.log
 /logs/
+
+/tests/setup_suite_test.go

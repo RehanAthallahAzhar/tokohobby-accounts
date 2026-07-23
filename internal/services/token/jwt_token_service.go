@@ -16,6 +16,8 @@ type JWTClaims struct {
 	UserID   uuid.UUID `json:"user_id"`
 	Username string    `json:"username"`
 	Role     string    `json:"role"`
+
+	// Claims standar bawaan spesifikasi JWT (Issuer, Expired, JWT ID/jti, dll)
 	jwt.RegisteredClaims
 }
 
@@ -67,8 +69,7 @@ func (s *jwtTokenService) GenerateAccessToken(ctx context.Context, user *entitie
 }
 
 func (s *jwtTokenService) GenerateRefreshToken(ctx context.Context) (string, error) {
-	// Gak perlu JWT aneh-aneh. Cukup string acak yang unik (UUID).
-	// Karena validasinya nanti kita cek langsung ke Redis, bukan cek signature cryptography.
+	// Only using UUID, because we’ll validate it directly in Redis later, rather than checking a cryptographic signature.
 	return uuid.New().String(), nil
 }
 

@@ -153,9 +153,11 @@ func (s *UserServiceImpl) Register(ctx context.Context, req *models.UserRegister
 			Username:  userDB.Username,
 			CreatedAt: time.Now(),
 		}
-		if err := s.eventPublisher.PublishUserRegistered(ctx, event); err != nil {
-			log.Errorf("Failed to publish user registered event: %v", err)
-			// Don't fail the registration if event publish fails
+		if s.eventPublisher != nil {
+			if err := s.eventPublisher.PublishUserRegistered(ctx, event); err != nil {
+				log.Errorf("Failed to publish user registered event: %v", err)
+				// Don't fail the registration if event publish fails
+			}
 		}
 	}()
 

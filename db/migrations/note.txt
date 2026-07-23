@@ -1,5 +1,6 @@
 Skenario 1: Memperbaiki Database yang "Kotor" 
-Ini terjadi jika migrate up gagal di tengah jalan, atau Anda mengubah file yang sudah dijalankan. Database akan "terkunci" di versi tertentu dan tidak tahu harus berbuat apa.
+Ini terjadi jika migrate up gagal di tengah jalan, atau Anda mengubah file yang sudah dijalankan. 
+Database akan "terkunci" di versi tertentu dan tidak tahu harus berbuat apa.
 
 Inilah saatnya Anda menggunakan force dan down untuk "memperbaiki paksa" catatan sejarah di database.
 

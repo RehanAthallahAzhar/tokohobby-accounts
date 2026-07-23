@@ -115,6 +115,7 @@ func main() {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}
 	defer rmq.Close()
+
 	// Setup exchange
 	if err := rabbitmqpkg.SetupUserExchange(rmq); err != nil {
 		log.Fatalf("Failed to setup user exchange: %v", err)
@@ -150,7 +151,7 @@ func main() {
 	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, refreshTokenRepo, log)
 
 	// Setup gRPC
-	lis, err := net.Listen("tcp", ":"+cfg.Server.GRPCPort)
+	lis, err := net.Listen("tcp", net.JoinHostPort("", cfg.Server.GRPCPort))
 	if err != nil {
 		log.Fatalf("Failed to listen for gRPC server: %s: %v", cfg.Server.GRPCPort, err)
 	}
@@ -179,12 +180,6 @@ func main() {
 	// Setup Route
 	routes.InitRoutes(e, handler, tokenService)
 
-	// Start Echo API REST Server (Block main goroutine)
+	// Start RESTAPI (Block main goroutine)
 	e.Logger.Fatal(e.Start(":" + cfg.Server.Port))
-
-	/*
-		e.Start(echoPort) -> Ini adalah fungsi pemblokir (blocking function).
-			Begitu Anda memanggilnya, fungsi ini akan mengambil alih main() dan akan terus berjalan tanpa henti
-			untuk mendengarkan permintaan HTTP.
-	*/
 }

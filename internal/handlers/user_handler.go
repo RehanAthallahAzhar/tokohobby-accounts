@@ -77,6 +77,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 		IPAddress: c.RealIP(),
 		UserAgent: c.Request().UserAgent(),
 	}
+
 	// Fallback to request ID if no session ID
 	if metadata.SessionID == "" {
 		metadata.SessionID = c.Request().Header.Get("X-Request-Id")
@@ -87,21 +88,21 @@ func (h *UserHandler) Login(c echo.Context) error {
 		return h.handleServiceError(c, err)
 	}
 
-	// 15 minutes access token
+	// access token (1 hour)
 	accessToken, err := h.TokenService.GenerateAccessToken(ctx, userSvc)
 	if err != nil {
 		h.log.WithError(err).Error("Failed to generate Access Token")
 		return respondError(c, http.StatusInternalServerError, apperrors.ErrFailedToGenerateToken)
 	}
 
-	// 7 days refresh token
+	// refresh token (7 days)
 	refreshToken, err := h.TokenService.GenerateRefreshToken(ctx)
 	if err != nil {
 		h.log.WithError(err).Error("Failed to generate Refresh Token")
 		return respondError(c, http.StatusInternalServerError, apperrors.ErrFailedToGenerateToken)
 	}
 
-	// Store Refresh Token in Redis (e.g. 7 days)
+	// Store Refresh Token in Redis (7 days)
 	err = h.RefreshTokenRepo.StoreRefreshToken(ctx, userSvc.ID.String(), refreshToken, 7*24*time.Hour)
 	if err != nil {
 		h.log.WithError(err).Error("Failed to store Refresh Token")
@@ -170,14 +171,9 @@ func (h *UserHandler) Logout(c echo.Context) error {
 		return respondError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
 	}
 
-	// Optional: Revoke Refresh Token if provided in body?
-	// Since we can't extract Refresh Token from Access Token easily without DB lookup,
-	// Client *should* send the refresh token to revoke it.
-	// But standard logout often just kills access token.
-	// If the client deletes the refresh token on their side, it's effectively gone.
-	// Server-side revocation requires the client to send the refresh token to be blacklisted.
-
-	// Let's check if client sent Refresh Token in body for revocation
+	// Logout strategy: see docs/adr/ADR-004-logout-strategy.md
+	// Layer 1 (mandatory): Access Token blacklisted via UserService.Logout below.
+	// Layer 2 (best-effort): Revoke Refresh Token if client includes it in request body.
 	var req models.RefreshTokenRequest
 	if err := c.Bind(&req); err == nil && req.RefreshToken != "" {
 		_ = h.RefreshTokenRepo.RevokeRefreshToken(ctx, req.RefreshToken)
