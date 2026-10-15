@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
+	"github.com/XSAM/otelsql"
 
 	_ "github.com/lib/pq"
 )
@@ -23,7 +24,7 @@ func Connect(ctx context.Context, credential *models.Credential) (*sql.DB, error
 		credential.Port,
 	)
 
-	db, err := sql.Open("postgres", dsn)
+	db, err := otelsql.Open("postgres", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open connection: %w", err)
 	}

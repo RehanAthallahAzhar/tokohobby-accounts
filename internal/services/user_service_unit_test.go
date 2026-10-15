@@ -3,12 +3,13 @@ package services
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -118,8 +119,7 @@ func setupTest() (*UserServiceImpl, *MockUserRepository, *MockTokenService, *Moc
 	tokenMock := new(MockTokenService)
 	blacklist := new(MockJWTBlacklistRepo)
 
-	logger := logrus.New()
-	logger.SetLevel(logrus.FatalLevel) // suppress logs in tests
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	svc := NewUserService(repo, validator.New(), tokenMock, blacklist, nil, nil, logger)
 	return svc.(*UserServiceImpl), repo, tokenMock, blacklist

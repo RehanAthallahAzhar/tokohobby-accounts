@@ -22,3 +22,5 @@
 /logs/
 
 /tests/setup_suite_test.go
+
+/docs/setup

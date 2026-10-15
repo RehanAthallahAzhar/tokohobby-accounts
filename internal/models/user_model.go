@@ -1,6 +1,9 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
+	"github.com/google/uuid"
+)
 
 type UserRegisterRequest struct {
 	Name     string `json:"name" validate:"required"`
@@ -34,11 +37,12 @@ type UserUpdateRequest struct {
 	PhoneNumber string `json:"phone_number,omitempty"`
 }
 
-type RefreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
-}
-
 type UserLoginRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+type UserAuthResult struct {
+	User  *entities.User
+	Token *GenerateTokenResult
 }

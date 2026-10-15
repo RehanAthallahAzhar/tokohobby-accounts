@@ -1,11 +1,12 @@
 package middlewares
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
+	contextpkg "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/context"
+	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 
 	"github.com/labstack/echo/v4"
@@ -18,24 +19,42 @@ type AuthMiddlewareOptions struct {
 func AuthMiddleware(opts AuthMiddlewareOptions) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			authHeader := c.Request().Header.Get("Authorization")
-			if authHeader == "" || len(authHeader) < 7 || !strings.HasPrefix(authHeader, "Bearer ") {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Authentication token missing or invalid format"})
-			}
-			token := authHeader[7:]
+			req := c.Request()
+			ctx := req.Context()
 
-			isValid, userID, username, userRole, errMsg, err := opts.TokenService.ValidateToken(context.Background(), token)
+			authHeader := req.Header.Get("Authorization")
+			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+				return c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+					Error: apperrors.ErrInvalidTokenFormat.Error(),
+				})
+			}
+
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+			if tokenString == "" {
+				return c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+					Error: apperrors.ErrInvalidTokenFormat.Error(),
+				})
+			}
+
+			isValid, userID, username, role, errMsg, err := opts.TokenService.ValidateToken(ctx, tokenString)
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Server error while validating token"})
+				return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+					Error: apperrors.ErrInternalServerError.Error(),
+				})
 			}
 
 			if !isValid {
-				return c.JSON(http.StatusUnauthorized, map[string]string{"message": "Invalid token: " + errMsg})
+				return c.JSON(http.StatusUnauthorized, models.ErrorResponse{
+					Error: "Unauthorized: " + errMsg,
+				})
 			}
 
-			c.Set("userID", userID)
-			c.Set("username", username)
-			c.Set("role", userRole)
+			ctx = contextpkg.SetUserIDToContext(ctx, userID)
+			ctx = contextpkg.SetUsernameToContext(ctx, username)
+			ctx = contextpkg.SetRoleToContext(ctx, role)
+			ctx = contextpkg.SetAuthorizationHeaderToContext(ctx, authHeader)
+
+			c.SetRequest(req.WithContext(ctx))
 
 			return next(c)
 		}
@@ -50,8 +69,8 @@ func RequireRoles(allowedRoles ...string) echo.MiddlewareFunc {
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			role, ok := c.Get("role").(string)
-			if !ok {
+			role, err := contextpkg.GetRoleFromContext(c.Request().Context())
+			if err != nil {
 				return c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Unauthorized"})
 			}
 

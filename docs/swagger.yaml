@@ -1,0 +1,485 @@
+basePath: /api/v1
+definitions:
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_entities.User:
+    properties:
+      address:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        $ref: '#/definitions/gorm.DeletedAt'
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      phoneNumber:
+        type: string
+      role:
+        type: string
+      updatedAt:
+        type: string
+      username:
+        type: string
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse:
+    properties:
+      error: {}
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.GenerateTokenResult:
+    properties:
+      access_token:
+        type: string
+      access_token_expires_at:
+        type: string
+      refresh_token:
+        type: string
+      refresh_token_expires_at:
+        type: string
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.RefreshSessionRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserAuthResult:
+    properties:
+      token:
+        $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.GenerateTokenResult'
+      user:
+        $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_entities.User'
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserLoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserRegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      role:
+        type: string
+      token:
+        type: string
+      username:
+        type: string
+    required:
+    - email
+    - name
+    - password
+    - username
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserResponse:
+    properties:
+      address:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      phone_number:
+        type: string
+      refresh_token:
+        type: string
+      role:
+        type: string
+      token:
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserUpdateRequest:
+    properties:
+      address:
+        type: string
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      phone_number:
+        type: string
+      username:
+        type: string
+    required:
+    - email
+    - name
+    - username
+    type: object
+  gorm.DeletedAt:
+    properties:
+      time:
+        type: string
+      valid:
+        description: Valid is true if Time is not NULL
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@tokohobby.com
+    name: API Support
+  description: Microservice untuk manajemen akun dan autentikasi TokoHobby.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: TokoHobby Accounts API
+  version: "1.0"
+paths:
+  /api/v1/accounts:
+    get:
+      description: Mendapatkan semua user dalam sistem TokoHobby
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Users Retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserResponse'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get All Users
+      tags:
+      - Users
+  /api/v1/accounts/{id}:
+    delete:
+      description: Delete user berdasarkan ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User Deleted
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserResponse'
+              type: object
+        "400":
+          description: Invalid Request Payload / Validation Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "404":
+          description: User Not Found
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete User
+      tags:
+      - Users
+    get:
+      description: Mendapatkan user berdasarkan ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User Retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserResponse'
+              type: object
+        "400":
+          description: Invalid Request Payload / Validation Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "404":
+          description: User Not Found
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get User by ID
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Update user berdasarkan ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Payload Update User
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User Updated
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserResponse'
+              type: object
+        "400":
+          description: Invalid Request Payload / Validation Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "404":
+          description: User Not Found
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update User
+      tags:
+      - Users
+  /api/v1/accounts/login:
+    post:
+      consumes:
+      - application/json
+      description: Melakukan login ke sistem TokoHobby
+      parameters:
+      - description: Payload Login
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login Success
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserAuthResult'
+              type: object
+        "400":
+          description: Invalid Request Payload / Validation Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "401":
+          description: Invalid Credentials
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      summary: Login User
+      tags:
+      - Authentication
+  /api/v1/accounts/profile:
+    get:
+      description: Mendapatkan profil user saat ini
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User Retrieved
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserResponse'
+              type: object
+        "401":
+          description: Invalid User Session
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get User Profile
+      tags:
+      - Users
+  /api/v1/accounts/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh user session berdasarkan old refresh token
+      parameters:
+      - description: Payload Refresh Session
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.RefreshSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Refresh Session Success
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.GenerateTokenResult'
+              type: object
+        "400":
+          description: Invalid Request Payload / Validation Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "401":
+          description: Invalid Session Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Refresh Session
+      tags:
+      - Authentication
+  /api/v1/accounts/register:
+    post:
+      consumes:
+      - application/json
+      description: Mendaftarkan pengguna baru ke dalam sistem TokoHobby
+      parameters:
+      - description: Payload Registrasi
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserRegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.UserResponse'
+              type: object
+        "400":
+          description: Invalid Request Payload / Validation Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "409":
+          description: Email or Username already exists
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      summary: Registrasi User Baru
+      tags:
+      - Authentication
+  /logout:
+    post:
+      consumes:
+      - application/json
+      description: Memvalidasi dan merrevok (membina blacklist) JWT Access Token pengguna
+        di Redis agar tidak dapat digunakan kembali.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logout successful
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.SuccessResponse'
+        "400":
+          description: Invalid Token Format
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "401":
+          description: Unauthorized / Invalid Token / Expired Token
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_RehanAthallahAzhar_tokohobby-accounts_internal_models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout User
+      tags:
+      - Authentication
+securityDefinitions:
+  BearerAuth:
+    description: 'Masukkan token JWT dengan format: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

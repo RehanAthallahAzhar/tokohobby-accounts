@@ -1,290 +1,172 @@
 package handlers
 
 import (
-	"fmt"
+	"log/slog"
 	"net/http"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/sirupsen/logrus"
-
-	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
-	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
-	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/helpers"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
+	contextpkg "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/context"
+	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services"
-	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 )
 
 type UserHandler struct {
-	UserRepo         repositories.UserRepository
 	UserService      services.UserService
-	TokenService     token.TokenService
 	JWTBlacklistRepo repositories.JWTBlacklistRepository
-	RefreshTokenRepo repositories.RefreshTokenRepository
 	EventPublisher   *rabbitmq.EventPublisher
-	log              *logrus.Logger
+	log              *slog.Logger
 }
 
-func NewHandler(
-	userRepo repositories.UserRepository,
+func NewUserHandler(
 	userService services.UserService,
-	tokenService token.TokenService,
 	jwtBlacklistRepo repositories.JWTBlacklistRepository,
-	refreshTokenRepo repositories.RefreshTokenRepository,
-	log *logrus.Logger,
+	log *slog.Logger,
 ) *UserHandler {
 	return &UserHandler{
-		UserRepo:         userRepo,
 		UserService:      userService,
-		TokenService:     tokenService,
 		JWTBlacklistRepo: jwtBlacklistRepo,
-		RefreshTokenRepo: refreshTokenRepo,
 		log:              log,
 	}
 }
 
-func (h *UserHandler) RegisterUser(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	var req models.UserRegisterRequest
-	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
-	}
-
-	userSvc, err := h.UserService.Register(ctx, &req)
-	if err != nil {
-		return h.handleServiceError(c, err)
-	}
-	return respondSuccess(c, http.StatusCreated, MsgUserCreated, toUserResponse(userSvc))
-}
-
-func (h *UserHandler) Login(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	var req models.UserLoginRequest
-	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
-	}
-
-	// Extract activity metadata from HTTP request
-	metadata := &services.ActivityMetadata{
-		SessionID: c.Request().Header.Get("X-Session-Id"),
-		IPAddress: c.RealIP(),
-		UserAgent: c.Request().UserAgent(),
-	}
-
-	// Fallback to request ID if no session ID
-	if metadata.SessionID == "" {
-		metadata.SessionID = c.Request().Header.Get("X-Request-Id")
-	}
-
-	userSvc, err := h.UserService.Login(ctx, &req, metadata)
-	if err != nil {
-		return h.handleServiceError(c, err)
-	}
-
-	// access token (1 hour)
-	accessToken, err := h.TokenService.GenerateAccessToken(ctx, userSvc)
-	if err != nil {
-		h.log.WithError(err).Error("Failed to generate Access Token")
-		return respondError(c, http.StatusInternalServerError, apperrors.ErrFailedToGenerateToken)
-	}
-
-	// refresh token (7 days)
-	refreshToken, err := h.TokenService.GenerateRefreshToken(ctx)
-	if err != nil {
-		h.log.WithError(err).Error("Failed to generate Refresh Token")
-		return respondError(c, http.StatusInternalServerError, apperrors.ErrFailedToGenerateToken)
-	}
-
-	// Store Refresh Token in Redis (7 days)
-	err = h.RefreshTokenRepo.StoreRefreshToken(ctx, userSvc.ID.String(), refreshToken, 7*24*time.Hour)
-	if err != nil {
-		h.log.WithError(err).Error("Failed to store Refresh Token")
-		return respondError(c, http.StatusInternalServerError, fmt.Errorf("failed to create session"))
-	}
-
-	res := toUserResponse(userSvc)
-	res.Token = accessToken
-	res.RefreshToken = refreshToken
-
-	return respondSuccess(c, http.StatusOK, MsgLogin, res)
-}
-
-func (h *UserHandler) RefreshSession(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	var req models.RefreshTokenRequest
-	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
-	}
-
-	userIDStr, err := h.RefreshTokenRepo.ValidateRefreshToken(ctx, req.RefreshToken)
-	if err != nil || userIDStr == "" {
-		h.log.Warnf("Invalid or expired refresh token attempt: %v", err)
-		return respondError(c, http.StatusUnauthorized, fmt.Errorf("invalid or expired refresh token"))
-	}
-
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		h.log.Errorf("Invalid user ID format in session: %v", err)
-		return respondError(c, http.StatusInternalServerError, fmt.Errorf("internal session error"))
-	}
-
-	userSvc, err := h.UserService.GetUserByID(ctx, userID)
-	if err != nil {
-		return respondError(c, http.StatusUnauthorized, fmt.Errorf("user not found"))
-	}
-
-	// Generate NEW Access Token
-	newAccessToken, err := h.TokenService.GenerateAccessToken(ctx, userSvc)
-	if err != nil {
-		h.log.WithError(err).Error("Failed to generate Access Token during refresh")
-		return respondError(c, http.StatusInternalServerError, apperrors.ErrFailedToGenerateToken)
-	}
-
-	// Generate NEW Refresh Token
-	newRefreshToken, _ := h.TokenService.GenerateRefreshToken(ctx)
-
-	// Revoke old Refresh Token
-	h.RefreshTokenRepo.RevokeRefreshToken(ctx, req.RefreshToken)
-
-	// Store new Refresh Token
-	h.RefreshTokenRepo.StoreRefreshToken(ctx, userIDStr, newRefreshToken, 7*24*time.Hour)
-
-	return respondSuccess(c, http.StatusOK, "Session refreshed", map[string]string{
-		"token":         newAccessToken,
-		"refresh_token": newRefreshToken,
-	})
-}
-
-func (h *UserHandler) Logout(c echo.Context) error {
-	ctx := c.Request().Context()
-
-	authHeader := c.Request().Header.Get("Authorization")
-	if authHeader == "" {
-		return respondError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
-	}
-
-	// Logout strategy: see docs/adr/ADR-004-logout-strategy.md
-	// Layer 1 (mandatory): Access Token blacklisted via UserService.Logout below.
-	// Layer 2 (best-effort): Revoke Refresh Token if client includes it in request body.
-	var req models.RefreshTokenRequest
-	if err := c.Bind(&req); err == nil && req.RefreshToken != "" {
-		_ = h.RefreshTokenRepo.RevokeRefreshToken(ctx, req.RefreshToken)
-	}
-
-	if err := h.UserService.Logout(ctx, authHeader); err != nil {
-		return h.handleServiceError(c, err)
-	}
-
-	return respondSuccess(c, http.StatusOK, MsgLogout, nil)
-}
-
+// GetAllUsers godoc
+// @Summary Get All Users
+// @Description Mendapatkan semua user dalam sistem TokoHobby
+// @Tags Users
+// @Produce json
+// @Success 200 {object} models.SuccessResponse{data=[]models.UserResponse} "Users Retrieved"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
+// @Router /api/v1/accounts [get]
+// @Security BearerAuth
 func (h *UserHandler) GetAllUsers(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	res, err := h.UserService.GetAllUsers(ctx)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return handleServiceError(c, err)
 	}
 
 	return respondSuccess(c, http.StatusOK, MsgUsersRetrieved, toUserResponses(res))
 }
 
+// GetUserByID godoc
+// @Summary Get User by ID
+// @Description Mendapatkan user berdasarkan ID
+// @Tags Users
+// @Produce json
+// @Param id path string true "User ID" format(uuid)
+// @Success 200 {object} models.SuccessResponse{data=models.UserResponse} "User Retrieved"
+// @Failure 400 {object} models.ErrorResponse "Invalid Request Payload / Validation Error"
+// @Failure 404 {object} models.ErrorResponse "User Not Found"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
+// @Router /api/v1/accounts/{id} [get]
+// @Security BearerAuth
 func (h *UserHandler) GetUserByID(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	id, err := extractUserID(c)
+	id, err := helpers.GetIDFromPathParam(c, "id")
 	if err != nil {
-		return respondError(c, http.StatusUnauthorized, apperrors.ErrInvalidUserSession)
+		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
 	}
 
 	res, err := h.UserService.GetUserByID(ctx, id)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return handleServiceError(c, err)
 	}
 
 	return respondSuccess(c, http.StatusOK, MsgUserRetrieved, toUserResponse(res))
 }
 
+// GetUserProfile godoc
+// @Summary Get User Profile
+// @Description Mendapatkan profil user saat ini
+// @Tags Users
+// @Produce json
+// @Success 200 {object} models.SuccessResponse{data=models.UserResponse} "User Retrieved"
+// @Failure 401 {object} models.ErrorResponse "Invalid User Session"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
+// @Router /api/v1/accounts/profile [get]
+// @Security BearerAuth
 func (h *UserHandler) GetUserProfile(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	id, err := extractUserID(c)
+	id, err := contextpkg.GetUserIDFromContext(ctx)
 	if err != nil {
-		return respondError(c, http.StatusUnauthorized, apperrors.ErrInvalidUserSession)
+		return handleError(c, http.StatusUnauthorized, apperrors.ErrInvalidUserSession)
 	}
 
 	res, err := h.UserService.GetUserByID(ctx, id)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return handleServiceError(c, err)
 	}
 
 	return respondSuccess(c, http.StatusOK, MsgUserRetrieved, toUserResponse(res))
 }
 
+// UpdateUser godoc
+// @Summary Update User
+// @Description Update user berdasarkan ID
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param id path string true "User ID" format(uuid)
+// @Param request body models.UserUpdateRequest true "Payload Update User"
+// @Success 200 {object} models.SuccessResponse{data=models.UserResponse} "User Updated"
+// @Failure 400 {object} models.ErrorResponse "Invalid Request Payload / Validation Error"
+// @Failure 404 {object} models.ErrorResponse "User Not Found"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
+// @Router /api/v1/accounts/{id} [put]
+// @Security BearerAuth
 func (h *UserHandler) UpdateUser(c echo.Context) error {
 	ctx := c.Request().Context()
 
-	id, err := extractUserID(c)
+	id, err := contextpkg.GetUserIDFromContext(ctx)
 	if err != nil {
-		return respondError(c, http.StatusUnauthorized, apperrors.ErrInvalidUserSession)
+		return handleError(c, http.StatusUnauthorized, apperrors.ErrInvalidUserSession)
 	}
 
 	var req models.UserUpdateRequest
 	if err := c.Bind(&req); err != nil {
-		return respondError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
 	}
 
 	res, err := h.UserService.UpdateUser(ctx, id, &req)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return handleServiceError(c, err)
 	}
 
 	return respondSuccess(c, http.StatusOK, MsgUserUpdated, toUserResponse(res))
 }
 
+// DeleteUser godoc
+// @Summary Delete User
+// @Description Delete user berdasarkan ID
+// @Tags Users
+// @Produce json
+// @Param id path string true "User ID" format(uuid)
+// @Success 200 {object} models.SuccessResponse{data=models.UserResponse} "User Deleted"
+// @Failure 400 {object} models.ErrorResponse "Invalid Request Payload / Validation Error"
+// @Failure 404 {object} models.ErrorResponse "User Not Found"
+// @Failure 500 {object} models.ErrorResponse "Internal Server Error"
+// @Router /api/v1/accounts/{id} [delete]
+// @Security BearerAuth
 func (h *UserHandler) DeleteUser(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	id, err := helpers.GetIDFromPathParam(c, "id")
 	if err != nil {
-		return respondError(c, http.StatusBadRequest, err)
+		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
 	}
 
 	res, err := h.UserService.DeleteUser(ctx, id)
 	if err != nil {
-		return h.handleServiceError(c, err)
+		return handleServiceError(c, err)
 	}
 
 	return respondSuccess(c, http.StatusOK, MsgUserDeleted, toUserResponse(res))
-}
-
-// ------- HELPERS -------
-func toUserResponse(user *entities.User) *models.UserResponse {
-	return &models.UserResponse{
-		Id:          user.ID,
-		Name:        user.Name,
-		Username:    user.Username,
-		Email:       user.Email,
-		Role:        user.Role,
-		Address:     user.Address,
-		PhoneNumber: user.PhoneNumber,
-		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:   user.UpdatedAt.Format(time.RFC3339),
-	}
-}
-
-func toUserResponses(users []entities.User) []models.UserResponse {
-	var res []models.UserResponse
-	for _, user := range users {
-		res = append(res, *toUserResponse(&user))
-	}
-	return res
 }

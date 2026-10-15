@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,7 @@ func (m *MockUserService) Register(ctx context.Context, req *models.UserRegister
 	}
 	return args.Get(0).(*entities.User), args.Error(1)
 }
+
 func (m *MockUserService) Login(ctx context.Context, req *models.UserLoginRequest, meta *services.ActivityMetadata) (*entities.User, error) {
 	args := m.Called(ctx, req, meta)
 	if args.Get(0) == nil {
@@ -42,58 +44,83 @@ func (m *MockUserService) Login(ctx context.Context, req *models.UserLoginReques
 	}
 	return args.Get(0).(*entities.User), args.Error(1)
 }
+
 func (m *MockUserService) Logout(ctx context.Context, token string) error {
 	return m.Called(ctx, token).Error(0)
 }
+
 func (m *MockUserService) GetAllUsers(ctx context.Context) ([]entities.User, error) {
 	args := m.Called(ctx)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).([]entities.User), args.Error(1)
 }
+
 func (m *MockUserService) GetUserByID(ctx context.Context, id uuid.UUID) (*entities.User, error) {
 	args := m.Called(ctx, id)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.User), args.Error(1)
 }
+
 func (m *MockUserService) GetUserByIDs(ctx context.Context, id []uuid.UUID) ([]entities.User, error) {
 	args := m.Called(ctx, id)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).([]entities.User), args.Error(1)
 }
+
 func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req *models.UserUpdateRequest) (*entities.User, error) {
 	args := m.Called(ctx, id, req)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.User), args.Error(1)
 }
+
 func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) (*entities.User, error) {
 	args := m.Called(ctx, id)
-	if args.Get(0) == nil { return nil, args.Error(1) }
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*entities.User), args.Error(1)
 }
 
 type MockTokenService struct{ mock.Mock }
+
 func (m *MockTokenService) GenerateAccessToken(ctx context.Context, user *entities.User) (string, error) {
 	args := m.Called(ctx, user)
 	return args.String(0), args.Error(1)
 }
+
 func (m *MockTokenService) GenerateRefreshToken(ctx context.Context) (string, error) {
 	args := m.Called(ctx)
 	return args.String(0), args.Error(1)
 }
+
 func (m *MockTokenService) ValidateToken(ctx context.Context, tokenString string) (bool, uuid.UUID, string, string, string, error) {
 	args := m.Called(ctx, tokenString)
 	return args.Bool(0), args.Get(1).(uuid.UUID), args.String(2), args.String(3), args.String(4), args.Error(5)
 }
-func (m *MockTokenService) BlacklistToken(ctx context.Context, jti string, expiration time.Duration) error { return nil }
+
+func (m *MockTokenService) BlacklistToken(ctx context.Context, jti string, expiration time.Duration) error {
+	return nil
+}
 
 type MockRefreshTokenRepo struct{ mock.Mock }
+
 func (m *MockRefreshTokenRepo) StoreRefreshToken(ctx context.Context, userID string, token string, expiresAt time.Duration) error {
 	return m.Called(ctx, userID, token, expiresAt).Error(0)
 }
+
 func (m *MockRefreshTokenRepo) ValidateRefreshToken(ctx context.Context, token string) (string, error) {
 	args := m.Called(ctx, token)
 	return args.String(0), args.Error(1)
 }
+
 func (m *MockRefreshTokenRepo) RevokeRefreshToken(ctx context.Context, token string) error {
 	return m.Called(ctx, token).Error(0)
 }
@@ -103,10 +130,9 @@ func setupHandlerTest() (*echo.Echo, *UserHandler, *MockUserService, *MockTokenS
 	mockSvc := new(MockUserService)
 	mockToken := new(MockTokenService)
 	mockRT := new(MockRefreshTokenRepo)
-	logger := logrus.New()
-	logger.SetLevel(logrus.FatalLevel)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	handler := NewHandler(nil, mockSvc, mockToken, nil, mockRT, logger)
+	handler := NewUserHandler(mockSvc, nil, logger)
 	return e, handler, mockSvc, mockToken, mockRT
 }
 
@@ -157,7 +183,7 @@ func TestUserHandler_RegisterUser(t *testing.T) {
 			c := e.NewContext(req, rec)
 
 			// Execute target
-			err := handler.RegisterUser(c)
+			err := AuthHandler.Register(c)
 
 			// Assuming the handler always returns nil after writing to c using JSON/Bind/respondError
 			require.NoError(t, err)
@@ -189,7 +215,7 @@ func BenchmarkUserHandler_RegisterUser(b *testing.B) {
 		c := e.NewContext(req, rec)
 
 		b.StartTimer()
-		_ = handler.RegisterUser(c) // Ignore output for benchmarking purely execution pipeline
+		_ = handler.Register(c) // Ignore output for benchmarking purely execution pipeline
 	}
 }
 
@@ -208,16 +234,16 @@ func TestUserHandler_Login(t *testing.T) {
 			mockSetup: func(mSvc *MockUserService, mToken *MockTokenService, mRt *MockRefreshTokenRepo) {
 				mSvc.On("Login", mock.Anything, mock.AnythingOfType("*models.UserLoginRequest"), mock.AnythingOfType("*services.ActivityMetadata")).
 					Return(&entities.User{ID: uuid.New(), Username: "johndoe"}, nil)
-				
+
 				mToken.On("GenerateAccessToken", mock.Anything, mock.AnythingOfType("*entities.User")).Return("access_token", nil)
 				mToken.On("GenerateRefreshToken", mock.Anything).Return("refresh_token", nil)
-				
+
 				mRt.On("StoreRefreshToken", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("time.Duration")).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:    "Fail - Wrong Credentials 401", 
+			name:    "Fail - Wrong Credentials 401",
 			payload: &models.UserLoginRequest{Username: "johndoe", Password: "wrong"},
 			mockSetup: func(mSvc *MockUserService, mToken *MockTokenService, mRt *MockRefreshTokenRepo) {
 				mSvc.On("Login", mock.Anything, mock.AnythingOfType("*models.UserLoginRequest"), mock.AnythingOfType("*services.ActivityMetadata")).
@@ -237,10 +263,10 @@ func TestUserHandler_Login(t *testing.T) {
 			body, _ := json.Marshal(tt.payload)
 			req := httptest.NewRequest(http.MethodPost, "/login", bytes.NewReader(body))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-			
+
 			// Simulate IP and headers that Login metadata extraction expects
 			req.Header.Set("X-Session-Id", "session-123")
-			
+
 			rec := httptest.NewRecorder()
 			c := e.NewContext(req, rec)
 
@@ -251,7 +277,7 @@ func TestUserHandler_Login(t *testing.T) {
 			// Some error handlers inside echo handle the error response writing, so if c was written to we check rec.Code.
 			// However custom error handlers might intercept returned errors. Let's assume respondError was called if rec.Code was updated.
 			if rec.Code != http.StatusOK {
-			    // This ensures we're logging validation
+				// This ensures we're logging validation
 			}
 		})
 	}

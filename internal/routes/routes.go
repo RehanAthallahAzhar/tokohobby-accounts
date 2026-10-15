@@ -1,21 +1,25 @@
 package routes
 
 import (
+	"github.com/labstack/echo/v4"
+
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/handlers"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/middlewares"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
-	"github.com/labstack/echo/v4"
+	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
-func InitRoutes(e *echo.Echo, handler *handlers.UserHandler, tokenService token.TokenService) {
+func InitRoutes(e *echo.Echo, userHandler *handlers.UserHandler, authHandler *handlers.AuthHandler, tokenService token.TokenService) {
 	e.Static("/static", "template")
 
-	api := e.Group("/api")
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
+
+	api := e.Group("/api/v1")
 
 	public := api.Group("/accounts")
-	public.POST("/register", handler.RegisterUser)
-	public.POST("/login", handler.Login)
-	public.POST("/refresh", handler.RefreshSession)
+	public.POST("/register", authHandler.Register)
+	public.POST("/login", authHandler.Login)
+	public.POST("/refresh", authHandler.RefreshSession)
 
 	jwtAuthMiddleware := middlewares.AuthMiddleware(middlewares.AuthMiddlewareOptions{
 		TokenService: tokenService,
@@ -25,13 +29,14 @@ func InitRoutes(e *echo.Echo, handler *handlers.UserHandler, tokenService token.
 	protected.Use(jwtAuthMiddleware)
 	{
 		// all users
-		protected.GET("/profile", handler.GetUserProfile)
-		protected.PUT("/", handler.UpdateUser)
-		protected.DELETE("/:id", handler.DeleteUser)
-		protected.POST("/logout", handler.Logout)
+		protected.GET("/profile", userHandler.GetUserProfile)
+		protected.PUT("", userHandler.UpdateUser)
+		protected.DELETE("/:id", userHandler.DeleteUser)
+		protected.POST("/logout", authHandler.Logout)
 
 		// admin
-		protected.GET("/", handler.GetAllUsers, middlewares.RequireRoles("admin"))
-		protected.GET("/:id", handler.GetUserByID, middlewares.RequireRoles("admin"))
+		protected.GET("", userHandler.GetAllUsers, middlewares.RequireRoles("admin"))
+		protected.GET("/:id", userHandler.GetUserByID, middlewares.RequireRoles("admin"))
+
 	}
 }

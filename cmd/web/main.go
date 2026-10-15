@@ -2,10 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -38,16 +43,39 @@ import (
 	authpb "github.com/RehanAthallahAzhar/tokohobby-protos/pb/auth"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
+	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/tracer"
 	"github.com/RehanAthallahAzhar/tokohobby-messaging/kafka"
 	rabbitmqpkg "github.com/RehanAthallahAzhar/tokohobby-messaging/rabbitmq"
+
+	_ "github.com/RehanAthallahAzhar/tokohobby-accounts/docs"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 )
 
+// @title TokoHobby Accounts API
+// @version 1.0
+// @description Microservice untuk manajemen akun dan autentikasi TokoHobby.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.email support@tokohobby.com
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Masukkan token JWT dengan format: Bearer {token}
 func main() {
 	log := logger.NewLogger()
 
 	cfg, err := configs.LoadConfig(log)
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		log.Error("Failed to load configuration", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	dbCredential := models.Credential{
@@ -64,7 +92,8 @@ func main() {
 	// Setup DB
 	conn, err := db.Connect(ctx, &dbCredential)
 	if err != nil {
-		log.Fatalf("DB connection error: %v", err)
+		log.Error("DB connection error", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
@@ -80,11 +109,13 @@ func main() {
 		connectionString,
 	)
 	if err != nil {
-		log.Fatalf("Failed to create migrate instance: %v", err)
+		log.Error("Failed to create migrate instance", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		log.Fatalf("Failed to run migrations: %v", err)
+		log.Error("Failed to run migrations", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	defer conn.Close()
@@ -98,7 +129,8 @@ func main() {
 	// Setup Redis
 	redisClient, err := redisclient.NewRedisClient(&cfg.Redis, log)
 	if err != nil {
-		log.Fatalf("Failed to Inilialization redis client : %v", err)
+		log.Error("Failed to initialize redis client", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer redisClient.Close()
 
@@ -112,31 +144,52 @@ func main() {
 	}
 	rmq, err := rabbitmqpkg.NewRabbitMQ(rmqConfig)
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		log.Error("Failed to connect to RabbitMQ", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer rmq.Close()
 
 	// Setup exchange
 	if err := rabbitmqpkg.SetupUserExchange(rmq); err != nil {
-		log.Fatalf("Failed to setup user exchange: %v", err)
+		log.Error("Failed to setup user exchange", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	// Create event publisher (RabbitMQ)
 	eventPublisher := rabbitmq.NewEventPublisher(rmq, log)
 
-	// Initialize Kafka producer for user activity tracking
+	// kafka producer for user activity tracking
 	var kafkaProducer *kafka.ActivityProducer
 	if cfg.Kafka.Brokers != "" {
 		kafkaBrokers := strings.Split(cfg.Kafka.Brokers, ",")
 		kafkaProducer = kafka.NewActivityProducer(kafkaBrokers)
 		defer kafkaProducer.Close()
-		log.Infof("Kafka producer initialized for brokers: %v", kafkaBrokers)
+		log.Info("Kafka producer initialized", slog.Any("brokers", kafkaBrokers))
 	} else {
 		log.Warn("Kafka brokers not configured, user activity tracking disabled")
 	}
 
+	// Initialize Tracer
+	samplerRatio := cfg.Tracer.SamplerRatio
+	shutdownTracer, err := tracer.InitTracer(ctx, tracer.Config{
+		ServiceName:    cfg.Tracer.ServiceName,
+		ServiceVersion: cfg.Tracer.ServiceVersion,
+		Environment:    cfg.Tracer.Environment,
+		Endpoint:       cfg.Tracer.Endpoint,
+		Insecure:       cfg.Tracer.Insecure,
+		SamplerRatio:   samplerRatio,
+	})
+	if err != nil {
+		log.ErrorContext(ctx, "Failed to initialize tracer", slog.Any("error", err))
+	}
+	defer func() {
+		if err := shutdownTracer(context.Background()); err != nil {
+			log.ErrorContext(ctx, "Error shutting down tracer", slog.Any("error", err))
+		}
+	}()
+
 	// Setup Repo
-	usersRepo := repositories.NewUserRepository(sqlcQueries, log)
+	usersRepo := repositories.NewUserRepository(sqlcQueries)
 	jwtBlacklistRepo := repositories.NewJWTBlacklistRepository(redisClient)
 	refreshTokenRepo := repositories.NewRefreshTokenRepository(redisClient)
 
@@ -145,15 +198,20 @@ func main() {
 	// Setup Service
 	audiences := strings.Split(cfg.Server.JWTAudience, ",")
 	tokenService := token.NewJWTTokenService(cfg.Server.JWTSecret, cfg.Server.JWTIssuer, audiences, jwtBlacklistRepo)
-	userService := services.NewUserService(usersRepo, validate, tokenService, jwtBlacklistRepo, eventPublisher, kafkaProducer, log)
+	baseUserService := services.NewUserService(usersRepo, validate, tokenService, jwtBlacklistRepo, refreshTokenRepo, eventPublisher, kafkaProducer, log)
+	baseAuthService := services.NewAuthService(usersRepo, validate, tokenService, jwtBlacklistRepo, refreshTokenRepo, eventPublisher, kafkaProducer, log)
+	userService := services.NewUserTracingDecorator(baseUserService)
+	authService := services.NewAuthTracingDecorator(baseAuthService)
 
 	// Setup Handler
-	handler := handlers.NewHandler(usersRepo, userService, tokenService, jwtBlacklistRepo, refreshTokenRepo, log)
+	userHandler := handlers.NewUserHandler(userService, jwtBlacklistRepo, log)
+	authHandler := handlers.NewAuthHandler(authService, userService, jwtBlacklistRepo, log)
 
 	// Setup gRPC
 	lis, err := net.Listen("tcp", net.JoinHostPort("", cfg.Server.GRPCPort))
 	if err != nil {
-		log.Fatalf("Failed to listen for gRPC server: %s: %v", cfg.Server.GRPCPort, err)
+		log.Error("Failed to listen for gRPC server", slog.String("port", cfg.Server.GRPCPort), slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	s := grpc.NewServer()
@@ -163,23 +221,45 @@ func main() {
 
 	go func() {
 		if err := s.Serve(lis); err != nil {
-			log.Fatalf("Failed to serve gRPC server: %v", err)
+			log.Error("Failed to serve gRPC server", slog.Any("error", err))
+			os.Exit(1)
 		}
 	}()
 
 	e := echo.New()
 
+	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
 	e.Use(middlewareApp.LoggingMiddleware(log))
+	e.Use(otelecho.Middleware("accounts-service"))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"}, // Nginx will handle stricter CORS
+		AllowOrigins: []string{"*"}, // Nginx will handle stricter CORS (NOT FOR PRODUCTION)
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
 	}))
 
 	// Setup Route
-	routes.InitRoutes(e, handler, tokenService)
+	routes.InitRoutes(e, userHandler, authHandler, tokenService)
 
-	// Start RESTAPI (Block main goroutine)
-	e.Logger.Fatal(e.Start(":" + cfg.Server.Port))
+	// Graceful shutdown pattern
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		if err := e.Start(":" + cfg.Server.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("Failed to start server", slog.Any("error", err))
+			os.Exit(1)
+		}
+	}()
+
+	<-quit // tunggu sinyal shutdown
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		log.Error("Server forced to shutdown", slog.Any("error", err))
+	}
+	s.GracefulStop() // gRPC graceful stop
+	log.Info("Server exited gracefully")
 }

@@ -1,9 +1,10 @@
 package configs
 
 import (
+	"log/slog"
+
 	"github.com/caarlos0/env/v6"
 	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
 )
 
 type AppConfig struct {
@@ -14,10 +15,10 @@ type AppConfig struct {
 	Server    ServerConfig
 	RabbitMQ  RabbitMQConfig
 	Kafka     KafkaConfig
-	Logrus    LogrusConfig
+	Tracer    TracerConfig
 }
 
-func LoadConfig(log *logrus.Logger) (*AppConfig, error) {
+func LoadConfig(log *slog.Logger) (*AppConfig, error) {
 	if err := godotenv.Load(); err != nil {
 		log.Warn("Warn: Failed to load .env.")
 	}

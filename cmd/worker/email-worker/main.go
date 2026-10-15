@@ -3,13 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/labstack/gommon/log"
-	"github.com/sirupsen/logrus"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/configs"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
@@ -18,20 +16,14 @@ import (
 )
 
 func main() {
-
 	log := logger.NewLogger()
-	log.SetFormatter(&logrus.JSONFormatter{
-		TimestampFormat: time.RFC3339,
-	})
-	log.SetOutput(os.Stdout)
-	log.SetLevel(logrus.InfoLevel)
 
 	log.Info("Starting Email Worker")
-	// RabbitMQ configuration from environment
 
 	cfg, err := configs.LoadConfig(log)
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		log.Error("Failed to load configuration", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	rmqConfig := &rabbitmqpkg.RabbitMQConfig{
@@ -42,12 +34,13 @@ func main() {
 		ReconnectDelay: cfg.RabbitMQ.ReconnectDelay,
 	}
 
-	log.Infof("Connecting to RabbitMQ: %s", cfg.RabbitMQ.URL)
+	log.Info("Connecting to RabbitMQ", slog.String("url", cfg.RabbitMQ.URL))
 
 	// Connect to RabbitMQ
 	rmq, err := rabbitmqpkg.NewRabbitMQ(rmqConfig)
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		log.Error("Failed to connect to RabbitMQ", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer rmq.Close()
 
@@ -55,13 +48,14 @@ func main() {
 
 	// Setup user exchange (ensure it exists)
 	if err := rabbitmqpkg.SetupUserExchange(rmq); err != nil {
-		log.Fatalf("Failed to setup user exchange: %v", err)
+		log.Error("Failed to setup user exchange", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	log.Info("User exchange setup complete")
 
 	// Create email service
-	emailService := NewEmailService()
+	emailService := NewEmailService(log)
 
 	// Create message handler
 	handler := func(ctx context.Context, body []byte) error {
@@ -71,8 +65,10 @@ func main() {
 			return fmt.Errorf("failed to unmarshal: %w", err)
 		}
 
-		logrus.Infof("Processing welcome email for user: %s (%s)",
-			event.Username, event.Email)
+		log.Info("Processing welcome email for user",
+			slog.String("username", event.Username),
+			slog.String("email", event.Email),
+		)
 
 		// Send email
 		return emailService.SendWelcomeEmail(event.Email, event.Username, event.UserID)
@@ -89,14 +85,16 @@ func main() {
 
 	// Declare queue
 	if err := consumer.DeclareQueue(true, false); err != nil {
-		log.Fatalf("Failed to declare queue: %v", err)
+		log.Error("Failed to declare queue", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	log.Info("Queue declared: email.user.welcome")
 
 	// Bind queue to exchange
 	if err := consumer.BindQueue("user.events", "user.registered"); err != nil {
-		log.Fatalf("Failed to bind queue: %v", err)
+		log.Error("Failed to bind queue", slog.Any("error", err))
+		os.Exit(1)
 	}
 
 	log.Info("Queue bound to exchange: user.events (routing key: user.registered)")
@@ -108,7 +106,7 @@ func main() {
 	// Start consumer in goroutine
 	go func() {
 		if err := consumer.Start(ctx); err != nil {
-			log.Warnf("Consumer error: %v", err)
+			log.Warn("Consumer error", slog.Any("error", err))
 		}
 	}()
 
@@ -129,75 +127,25 @@ func main() {
 }
 
 // EmailService handles email sending logic
-type EmailService struct{}
+type EmailService struct {
+	log *slog.Logger
+}
 
-func NewEmailService() *EmailService {
-	return &EmailService{}
+func NewEmailService(log *slog.Logger) *EmailService {
+	return &EmailService{log: log}
 }
 
 func (s *EmailService) SendWelcomeEmail(email, username, userID string) error {
 	// TODO: Implement actual SMTP email sending
-	// For now, just log the email
-
-	log.Infof("[📨 EMAIL] Sending welcome email to: %s", email)
-	log.Infof("   To: %s", email)
-	log.Infof("   Username: %s", username)
-	log.Infof("   User ID: %s", userID)
+	s.log.Info("Sending welcome email",
+		slog.String("email", email),
+		slog.String("username", username),
+		slog.String("user_id", userID),
+	)
 
 	// Simulate email sending delay
 	time.Sleep(500 * time.Millisecond)
 
-	// Example SMTP implementation (uncomment when ready):
-	/*
-		import "gopkg.in/gomail.v2"
-
-		msg := gomail.NewMessage()
-		msg.SetHeader("From", "noreply@tokohobby.shop")
-		msg.SetHeader("To", email)
-		msg.SetHeader("Subject", "Welcome to TokoHobby!")
-		msg.SetBody("text/html", fmt.Sprintf(`
-			<!DOCTYPE html>
-			<html>
-			<head>
-				<style>
-					body { font-family: Arial, sans-serif; line-height: 1.6; }
-					.container { max-width: 600px; margin: 0 auto; padding: 20px; }
-					.header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
-					.content { padding: 30px; background: #f9f9f9; }
-					.button { display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<div class="header">
-						<h1>Welcome to TokoHobby! 🎉</h1>
-					</div>
-					<div class="content">
-						<h2>Hi %s!</h2>
-						<p>Thank you for joining TokoHobby, your one-stop shop for all hobby needs.</p>
-						<p>Your account is now active and ready to use. Start exploring our amazing collection of products!</p>
-						<a href="https://tokohobby.shop" class="button">Start Shopping</a>
-						<p style="margin-top: 30px; color: #666; font-size: 14px;">
-							If you didn't create this account, please ignore this email.
-						</p>
-					</div>
-				</div>
-			</body>
-			</html>
-		`, username))
-
-		d := gomail.NewDialer(
-			os.Getenv("SMTP_HOST"),
-			587,
-			os.Getenv("SMTP_USER"),
-			os.Getenv("SMTP_PASS"),
-		)
-
-		if err := d.DialAndSend(msg); err != nil {
-			return fmt.Errorf("failed to send email: %w", err)
-		}
-	*/
-
-	logrus.Infof("[MOCK] Welcome email sent to %s", username)
+	s.log.Info("[MOCK] Welcome email sent", slog.String("username", username))
 	return nil
 }

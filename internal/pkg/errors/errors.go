@@ -3,8 +3,17 @@ package errors
 import "errors"
 
 var (
+	// Client
 	ErrInvalidRequestPayload = errors.New("invalid request payload")
 	ErrInvalidQuery          = errors.New("invalid query parameters")
+	ErrClientCanceled        = errors.New("client request canceled")
+
+	// Server
+	ErrRequestTimeout      = errors.New("request timeout")
+	ErrServiceUnavailable  = errors.New("service unavailable")
+	ErrInternalServerError = errors.New("internal server error")
+
+	// Auth
 	ErrInvalidUserSession    = errors.New("invalid user session")
 	ErrInvalidToken          = errors.New("invalid token")
 	ErrExpiredToken          = errors.New("expired token")
@@ -15,21 +24,30 @@ var (
 	ErrFailedToRevokeToken   = errors.New("failed to revoke token")
 	ErrTokenNotFound         = errors.New("token not found")
 	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrAccountDisabled       = errors.New("account disabled")
+	ErrSessionError          = errors.New("session error")
+
+	// Domain
 	ErrUserAlreadyExists     = errors.New("user already exists")
 	ErrUsernameAlreadyExists = errors.New("username already exists")
 	ErrEmailAlreadyExists    = errors.New("email already exists")
 	ErrNotFound              = errors.New("not found")
 	ErrForbidden             = errors.New("forbidden")
+	ErrUserNotFound          = errors.New("user not found")
+	ErrResourceNotFound      = errors.New("resource not found")
+	ErrAlreadyExists         = errors.New("already exists")
 
-	ErrInternalServerError = errors.New("internal server error")
+	// Context
+	ErrFailedToGetIDFromContext                  = errors.New("failed to get ID from context")
+	ErrFailedToGetUserIDFromContext              = errors.New("failed to get UserID from context")
+	ErrFailedToGetRoleFromContext                = errors.New("failed to get role from context")
+	ErrFailedToGetUsernameFromContext            = errors.New("failed to get username from context")
+	ErrFailedToGetAuthorizationHeaderFromContext = errors.New("failed to get authorization header from context")
 
-	ErrUserNotFound       = errors.New("user not found")
-	ErrFailedToReadUser   = errors.New("failed to read user")
-	ErrFailedToCreateUser = errors.New("failed to create user")
-	ErrFailedToUpdateUser = errors.New("failed to update user")
-	ErrFailedToDeleteUser = errors.New("failed to delete user")
-
-	ErrProductOutOfStock = errors.New("product out of stock")
+	ErrUnprocessableEntity   = errors.New("unprocessable entity")
+	ErrDatabaseConnection    = errors.New("database connection error")
+	ErrRedisConnection       = errors.New("redis connection error")
+	ErrThirdPartyUnavailable = errors.New("third party unavailable")
 )
 
 type ValidationError struct {
@@ -38,6 +56,15 @@ type ValidationError struct {
 }
 type ValidationErrors struct {
 	Errors []ValidationError `json:"errors"`
+}
+
+type AppError struct {
+	Code    int    `json:"-"`
+	Message string `json:"message"`
+}
+
+func (e AppError) Error() string {
+	return e.Message
 }
 
 func (e ValidationErrors) Error() string {
