@@ -40,12 +40,8 @@ LIMIT 1;
 UPDATE users
 SET
     "name" = $2,
-    username = $3,
-    email = $4,
-    "password" = $5,
-    "role" = $6,
-    phone_number = $7,
-    "address" = $8,
+    "address" = $3,
+    phone_number = $4,
     updated_at = now()
 WHERE id = $1 AND deleted_at IS NULL RETURNING *;
 

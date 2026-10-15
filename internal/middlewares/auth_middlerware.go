@@ -6,7 +6,7 @@ import (
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
 	contextpkg "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/context"
-	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
+	appErrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 
 	"github.com/labstack/echo/v4"
@@ -25,21 +25,21 @@ func AuthMiddleware(opts AuthMiddlewareOptions) echo.MiddlewareFunc {
 			authHeader := req.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				return c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-					Error: apperrors.ErrInvalidTokenFormat.Error(),
+					Error: appErrors.ErrInvalidTokenFormat.Error(),
 				})
 			}
 
 			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 			if tokenString == "" {
 				return c.JSON(http.StatusUnauthorized, models.ErrorResponse{
-					Error: apperrors.ErrInvalidTokenFormat.Error(),
+					Error: appErrors.ErrInvalidTokenFormat.Error(),
 				})
 			}
 
 			isValid, userID, username, role, errMsg, err := opts.TokenService.ValidateToken(ctx, tokenString)
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-					Error: apperrors.ErrInternalServerError.Error(),
+					Error: appErrors.ErrInternalServerError.Error(),
 				})
 			}
 

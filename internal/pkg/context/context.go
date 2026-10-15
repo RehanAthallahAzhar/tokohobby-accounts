@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
+	appErrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 )
 
 type contextKey string
@@ -19,12 +19,12 @@ const AuthorizationHeaderKey contextKey = "authorizationHeader"
 func GetUserIDFromContext(ctx context.Context) (uuid.UUID, error) {
 	val := ctx.Value(UserIDKey)
 	if val == nil {
-		return uuid.Nil, apperrors.ErrFailedToGetUserIDFromContext
+		return uuid.Nil, appErrors.ErrFailedToGetUserIDFromContext
 	}
 
 	id, ok := val.(uuid.UUID)
 	if !ok {
-		return uuid.Nil, apperrors.ErrFailedToGetUserIDFromContext
+		return uuid.Nil, appErrors.ErrFailedToGetUserIDFromContext
 	}
 
 	return id, nil
@@ -33,12 +33,12 @@ func GetUserIDFromContext(ctx context.Context) (uuid.UUID, error) {
 func GetRoleFromContext(ctx context.Context) (string, error) {
 	val := ctx.Value(RoleKey)
 	if val == nil {
-		return "", apperrors.ErrFailedToGetRoleFromContext
+		return "", appErrors.ErrFailedToGetRoleFromContext
 	}
 
 	role, ok := val.(string)
 	if !ok {
-		return "", apperrors.ErrFailedToGetRoleFromContext
+		return "", appErrors.ErrFailedToGetRoleFromContext
 	}
 
 	return role, nil
@@ -46,12 +46,12 @@ func GetRoleFromContext(ctx context.Context) (string, error) {
 func GetAuthorizationHeaderFromContext(ctx context.Context) (string, error) {
 	val := ctx.Value(AuthorizationHeaderKey)
 	if val == nil {
-		return "", apperrors.ErrFailedToGetAuthorizationHeaderFromContext
+		return "", appErrors.ErrFailedToGetAuthorizationHeaderFromContext
 	}
 
 	authHeader, ok := val.(string)
 	if !ok {
-		return "", apperrors.ErrFailedToGetAuthorizationHeaderFromContext
+		return "", appErrors.ErrFailedToGetAuthorizationHeaderFromContext
 	}
 
 	return authHeader, nil
@@ -60,12 +60,12 @@ func GetAuthorizationHeaderFromContext(ctx context.Context) (string, error) {
 func GetUsernameFromContext(ctx context.Context) (string, error) {
 	val := ctx.Value(UsernameKey)
 	if val == nil {
-		return "", apperrors.ErrFailedToGetUsernameFromContext
+		return "", appErrors.ErrFailedToGetUsernameFromContext
 	}
 
 	username, ok := val.(string)
 	if !ok {
-		return "", apperrors.ErrFailedToGetUsernameFromContext
+		return "", appErrors.ErrFailedToGetUsernameFromContext
 	}
 
 	return username, nil

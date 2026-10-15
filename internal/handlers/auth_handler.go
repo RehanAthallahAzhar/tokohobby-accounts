@@ -7,7 +7,7 @@ import (
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
 	contextpkg "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/context"
-	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
+	appErrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services"
 	"github.com/labstack/echo/v4"
@@ -52,7 +52,7 @@ func (h *AuthHandler) Register(c echo.Context) error {
 
 	var req models.UserRegisterRequest
 	if err := c.Bind(&req); err != nil {
-		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+		return handleError(c, http.StatusBadRequest, appErrors.ErrInvalidRequestPayload)
 	}
 
 	userSvc, err := h.AuthService.Register(ctx, &req)
@@ -80,7 +80,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 
 	var req models.UserLoginRequest
 	if err := c.Bind(&req); err != nil {
-		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+		return handleError(c, http.StatusBadRequest, appErrors.ErrInvalidRequestPayload)
 	}
 
 	sessionID := c.Request().Header.Get("X-Session-Id")
@@ -119,7 +119,7 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 
 	authHeader, err := contextpkg.GetAuthorizationHeaderFromContext(ctx)
 	if err != nil {
-		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidTokenFormat)
+		return handleError(c, http.StatusBadRequest, appErrors.ErrInvalidTokenFormat)
 	}
 
 	err = h.AuthService.Logout(ctx, authHeader)
@@ -147,7 +147,7 @@ func (h *AuthHandler) RefreshSession(c echo.Context) error {
 
 	var req models.RefreshSessionRequest
 	if err := c.Bind(&req); err != nil {
-		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+		return handleError(c, http.StatusBadRequest, appErrors.ErrInvalidRequestPayload)
 	}
 
 	res, err := h.AuthService.RefreshSession(ctx, req.RefreshToken)

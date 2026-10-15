@@ -10,8 +10,7 @@ import (
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/entities"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
-	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
-	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
+	appErrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services/token"
 	"github.com/RehanAthallahAzhar/tokohobby-messaging/kafka"
@@ -69,19 +68,19 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req *models.UserRegister
 		return nil, err
 	}
 
-	var validationErrors []errors.ValidationError
+	var validationErrors []appErrors.ValidationError
 
 	// Check for duplicate username & email
 	existingUser, err := s.userRepo.ExistUsernameorEmail(ctx, req.Username, req.Email)
 	if err == nil && existingUser != nil {
 		if existingUser.Username == req.Username {
-			validationErrors = append(validationErrors, errors.ValidationError{
+			validationErrors = append(validationErrors, appErrors.ValidationError{
 				Field:   "username",
 				Message: "username already exists",
 			})
 		}
 		if existingUser.Email == req.Email {
-			validationErrors = append(validationErrors, errors.ValidationError{
+			validationErrors = append(validationErrors, appErrors.ValidationError{
 				Field:   "email",
 				Message: "email already exists",
 			})
@@ -104,7 +103,7 @@ func (s *AuthServiceImpl) Register(ctx context.Context, req *models.UserRegister
 	}
 
 	if len(validationErrors) > 0 {
-		return nil, apperrors.ValidationErrors{Errors: validationErrors}
+		return nil, appErrors.ValidationErrors{Errors: validationErrors}
 	}
 
 	dbParam := &db.CreateUserParams{
@@ -166,7 +165,7 @@ func (s *AuthServiceImpl) Login(ctx context.Context, req *models.UserLoginReques
 			slog.String("user_id", userDB.ID.String()),
 		)
 
-		return nil, apperrors.ErrInvalidCredentials
+		return nil, appErrors.ErrPasswordNotMatch
 	}
 
 	accTokenReq := &models.GenerateAccessTokenRequest{
@@ -183,7 +182,7 @@ func (s *AuthServiceImpl) Login(ctx context.Context, req *models.UserLoginReques
 			slog.Any("error", err),
 		)
 
-		return nil, apperrors.ErrFailedToGenerateToken
+		return nil, appErrors.ErrFailedToGenerateToken
 	}
 
 	// refresh token (7 days)
@@ -194,7 +193,7 @@ func (s *AuthServiceImpl) Login(ctx context.Context, req *models.UserLoginReques
 			slog.Any("error", err),
 		)
 
-		return nil, apperrors.ErrFailedToGenerateToken
+		return nil, appErrors.ErrFailedToGenerateToken
 	}
 
 	// Store Refresh Token in Redis (7 days)
@@ -205,7 +204,7 @@ func (s *AuthServiceImpl) Login(ctx context.Context, req *models.UserLoginReques
 			slog.Any("error", err),
 		)
 
-		return nil, apperrors.ErrFailedToGenerateToken
+		return nil, appErrors.ErrFailedToGenerateToken
 	}
 
 	user := userDB.ToDomain()
@@ -235,7 +234,7 @@ func (s *AuthServiceImpl) Logout(ctx context.Context, authHeader string) error {
 		s.log.WarnContext(ctx, "invalid logout attempt: token string format is invalid",
 			slog.String("auth_header", authHeader),
 		)
-		return apperrors.ErrInvalidTokenFormat
+		return appErrors.ErrInvalidTokenFormat
 	}
 
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &models.JWTClaims{})
@@ -244,7 +243,7 @@ func (s *AuthServiceImpl) Logout(ctx context.Context, authHeader string) error {
 			slog.String("auth_header", authHeader),
 			slog.Any("error", err),
 		)
-		return apperrors.ErrInvalidToken
+		return appErrors.ErrInvalidToken
 	}
 
 	claims, ok := token.Claims.(*models.JWTClaims)
@@ -252,7 +251,7 @@ func (s *AuthServiceImpl) Logout(ctx context.Context, authHeader string) error {
 		s.log.WarnContext(ctx, "invalid logout attempt: token claims type is invalid",
 			slog.String("auth_header", authHeader),
 		)
-		return apperrors.ErrInvalidToken
+		return appErrors.ErrInvalidToken
 	}
 
 	jti := claims.ID
@@ -260,7 +259,7 @@ func (s *AuthServiceImpl) Logout(ctx context.Context, authHeader string) error {
 		s.log.WarnContext(ctx, "invalid logout attempt: missing JTI in token claims",
 			slog.String("auth_header", authHeader),
 		)
-		return apperrors.ErrMissingJTI
+		return appErrors.ErrMissingJTI
 	}
 
 	remainingTime := time.Until(claims.ExpiresAt.Time)
@@ -268,7 +267,7 @@ func (s *AuthServiceImpl) Logout(ctx context.Context, authHeader string) error {
 		s.log.WarnContext(ctx, "invalid logout attempt: token has expired",
 			slog.String("auth_header", authHeader),
 		)
-		return apperrors.ErrExpiredToken
+		return appErrors.ErrExpiredToken
 	}
 
 	err = s.JWTBlacklistRepo.AddToBlacklist(ctx, jti, remainingTime)
@@ -277,7 +276,7 @@ func (s *AuthServiceImpl) Logout(ctx context.Context, authHeader string) error {
 			slog.String("jti", jti),
 			slog.Any("error", err),
 		)
-		return apperrors.ErrFailedToRevokeToken
+		return appErrors.ErrFailedToRevokeToken
 	}
 
 	s.publishActivity(ctx, "LOGOUT", claims.UserID.String(), jti, map[string]interface{}{
@@ -297,7 +296,7 @@ func (s *AuthServiceImpl) RefreshSession(ctx context.Context, oldRefreshToken st
 
 		slog.ErrorContext(ctx, "Failed to validate refresh token", slog.Any("error", err))
 
-		return nil, apperrors.ErrInvalidToken
+		return nil, appErrors.ErrInvalidToken
 	}
 
 	userID, err := uuid.Parse(userIDStr)
@@ -305,7 +304,7 @@ func (s *AuthServiceImpl) RefreshSession(ctx context.Context, oldRefreshToken st
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "invalid user ID format in session")
 
-		return nil, apperrors.ErrSessionError
+		return nil, appErrors.ErrSessionError
 	}
 
 	userSvc, err := s.userRepo.GetUserByID(ctx, userID)
@@ -315,7 +314,7 @@ func (s *AuthServiceImpl) RefreshSession(ctx context.Context, oldRefreshToken st
 
 		s.log.ErrorContext(ctx, "Failed to retrieve user by id", slog.Any("error", err))
 
-		return nil, apperrors.ErrUserNotFound
+		return nil, appErrors.ErrUserNotFound
 	}
 
 	req := &models.GenerateAccessTokenRequest{
@@ -332,7 +331,7 @@ func (s *AuthServiceImpl) RefreshSession(ctx context.Context, oldRefreshToken st
 
 		s.log.ErrorContext(ctx, "Failed to generate access token", slog.Any("error", err))
 
-		return nil, apperrors.ErrFailedToGenerateToken
+		return nil, appErrors.ErrFailedToGenerateToken
 	}
 
 	// Generate NEW Refresh Token
@@ -343,7 +342,7 @@ func (s *AuthServiceImpl) RefreshSession(ctx context.Context, oldRefreshToken st
 
 		s.log.ErrorContext(ctx, "Failed to generate new refresh token", slog.Any("error", err))
 
-		return nil, apperrors.ErrFailedToGenerateToken
+		return nil, appErrors.ErrFailedToGenerateToken
 	}
 
 	// Revoke old Refresh Token
@@ -361,7 +360,7 @@ func (s *AuthServiceImpl) RefreshSession(ctx context.Context, oldRefreshToken st
 
 		s.log.ErrorContext(ctx, "Failed to store new refresh token", slog.Any("error", err))
 
-		return nil, apperrors.ErrFailedToGenerateToken
+		return nil, appErrors.ErrFailedToGenerateToken
 	}
 
 	span.SetAttributes(

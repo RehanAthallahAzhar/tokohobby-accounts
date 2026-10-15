@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
-	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
+	appErrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 )
 
 // ------- HELPERS -------
@@ -34,15 +34,15 @@ func handleServiceError(c echo.Context, err error) error {
 	// Context Errors
 	if errors.Is(err, context.Canceled) {
 		// 499 Client Closed Request (Client Disconnect)
-		return handleError(c, 499, apperrors.ErrClientCanceled)
+		return handleError(c, 499, appErrors.ErrClientCanceled)
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		// 504 Gateway Timeout / Request Timeout
-		return handleError(c, http.StatusGatewayTimeout, apperrors.ErrRequestTimeout)
+		return handleError(c, http.StatusGatewayTimeout, appErrors.ErrRequestTimeout)
 	}
 
 	// validation errors
-	var valErrs apperrors.ValidationErrors
+	var valErrs appErrors.ValidationErrors
 	if errors.As(err, &valErrs) {
 		fieldErrs := make([]models.FieldErrorResponse, 0, len(valErrs.Errors))
 
@@ -59,7 +59,12 @@ func handleServiceError(c echo.Context, err error) error {
 		})
 	}
 
-	var customAppErr *apperrors.AppError
+	// password not match
+	if errors.Is(err, appErrors.ErrPasswordNotMatch) {
+		return handleError(c, http.StatusUnauthorized, err)
+	}
+
+	var customAppErr *appErrors.AppError
 	if errors.As(err, &customAppErr) {
 		// If you use custom AppError struct that carries its own StatusCode
 		return handleError(c, customAppErr.Code, customAppErr)
@@ -68,66 +73,66 @@ func handleServiceError(c echo.Context, err error) error {
 	// Sentinel Domain Errors
 	switch {
 	// 404 NOT FOUND
-	case errors.Is(err, apperrors.ErrUserNotFound),
-		errors.Is(err, apperrors.ErrResourceNotFound):
+	case errors.Is(err, appErrors.ErrUserNotFound),
+		errors.Is(err, appErrors.ErrResourceNotFound):
 		return handleError(c, http.StatusNotFound, err)
 
 	// 409 CONFLICT / DUPLICATE
-	case errors.Is(err, apperrors.ErrUserAlreadyExists),
-		errors.Is(err, apperrors.ErrEmailAlreadyExists),
-		errors.Is(err, apperrors.ErrUsernameAlreadyExists):
+	case errors.Is(err, appErrors.ErrUserAlreadyExists),
+		errors.Is(err, appErrors.ErrEmailAlreadyExists),
+		errors.Is(err, appErrors.ErrUsernameAlreadyExists):
 		return handleError(c, http.StatusConflict, err)
 
 	// 401 UNAUTHORIZED
-	case errors.Is(err, apperrors.ErrInvalidCredentials),
-		errors.Is(err, apperrors.ErrInvalidToken),
-		errors.Is(err, apperrors.ErrExpiredToken),
-		errors.Is(err, apperrors.ErrMissingJTI):
+	case errors.Is(err, appErrors.ErrInvalidCredentials),
+		errors.Is(err, appErrors.ErrInvalidToken),
+		errors.Is(err, appErrors.ErrExpiredToken),
+		errors.Is(err, appErrors.ErrMissingJTI):
 		return handleError(c, http.StatusUnauthorized, err)
 
 	// 403 FORBIDDEN
-	case errors.Is(err, apperrors.ErrForbidden),
-		errors.Is(err, apperrors.ErrAccountDisabled):
+	case errors.Is(err, appErrors.ErrForbidden),
+		errors.Is(err, appErrors.ErrAccountDisabled):
 		return handleError(c, http.StatusForbidden, err)
 
 	// 400 BAD REQUEST
-	case errors.Is(err, apperrors.ErrInvalidRequestPayload),
-		errors.Is(err, apperrors.ErrInvalidTokenFormat):
+	case errors.Is(err, appErrors.ErrInvalidRequestPayload),
+		errors.Is(err, appErrors.ErrInvalidTokenFormat):
 		return handleError(c, http.StatusBadRequest, err)
 
 	// 422 UNPROCESSABLE ENTITY
-	case errors.Is(err, apperrors.ErrUnprocessableEntity):
+	case errors.Is(err, appErrors.ErrUnprocessableEntity):
 		return handleError(c, http.StatusUnprocessableEntity, err)
 
 	// 503 SERVICE UNAVAILABLE
-	case errors.Is(err, apperrors.ErrDatabaseConnection),
-		errors.Is(err, apperrors.ErrRedisConnection),
-		errors.Is(err, apperrors.ErrThirdPartyUnavailable):
-		return handleError(c, http.StatusServiceUnavailable, apperrors.ErrServiceUnavailable)
+	case errors.Is(err, appErrors.ErrDatabaseConnection),
+		errors.Is(err, appErrors.ErrRedisConnection),
+		errors.Is(err, appErrors.ErrThirdPartyUnavailable):
+		return handleError(c, http.StatusServiceUnavailable, appErrors.ErrServiceUnavailable)
 	}
 
 	// // grpc
 	// if st, ok := status.FromError(err); ok {
 	// 	switch st.Code() {
 	// 	case codes.NotFound:
-	// 		return handleError(c, http.StatusNotFound, apperrors.ErrResourceNotFound)
+	// 		return handleError(c, http.StatusNotFound, appErrors.ErrResourceNotFound)
 	// 	case codes.AlreadyExists:
-	// 		return handleError(c, http.StatusConflict, apperrors.ErrAlreadyExists)
+	// 		return handleError(c, http.StatusConflict, appErrors.ErrAlreadyExists)
 	// 	case codes.InvalidArgument:
-	// 		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+	// 		return handleError(c, http.StatusBadRequest, appErrors.ErrInvalidRequestPayload)
 	// 	case codes.Unauthenticated:
-	// 		return handleError(c, http.StatusUnauthorized, apperrors.ErrInvalidToken)
+	// 		return handleError(c, http.StatusUnauthorized, appErrors.ErrInvalidToken)
 	// 	case codes.PermissionDenied:
-	// 		return handleError(c, http.StatusForbidden, apperrors.ErrForbidden)
+	// 		return handleError(c, http.StatusForbidden, appErrors.ErrForbidden)
 	// 	case codes.Unavailable:
-	// 		return handleError(c, http.StatusServiceUnavailable, apperrors.ErrServiceUnavailable)
+	// 		return handleError(c, http.StatusServiceUnavailable, appErrors.ErrServiceUnavailable)
 	// 	case codes.DeadlineExceeded:
-	// 		return handleError(c, http.StatusGatewayTimeout, apperrors.ErrRequestTimeout)
+	// 		return handleError(c, http.StatusGatewayTimeout, appErrors.ErrRequestTimeout)
 	// 	}
 	// }
 
 	// unhandle error
-	return handleError(c, http.StatusInternalServerError, apperrors.ErrInternalServerError)
+	return handleError(c, http.StatusInternalServerError, appErrors.ErrInternalServerError)
 }
 
 func respondSuccess(c echo.Context, status int, message string, data interface{}) error {

@@ -98,7 +98,9 @@ func TestUserRepositoryUnit_ExistUsernameorEmail(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			mockDB, mock, repo := setupRepositoryMockTest()
-			defer mockDB.Close()
+			t.Cleanup(func() {
+				assert.NoError(t, mockDB.Close())
+			})
 
 			tt.mockSetup(mock)
 			ctx := context.Background()
@@ -124,7 +126,9 @@ func TestUserRepositoryUnit_ExistUsernameorEmail(t *testing.T) {
 func TestUserRepositoryUnit_GetAllUsers(t *testing.T) {
 	t.Parallel()
 	mockDB, mock, repo := setupRepositoryMockTest()
-	defer mockDB.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, mockDB.Close())
+	})
 
 	query := regexp.QuoteMeta(`SELECT id, "name", username, email, "password",phone_number, "address", "role", created_at, updated_at FROM users WHERE deleted_at IS NULL`)
 
@@ -186,7 +190,9 @@ func TestUserRepositoryUnit_CreateUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			mockDB, mock, repo := setupRepositoryMockTest()
-			defer mockDB.Close()
+			t.Cleanup(func() {
+				assert.NoError(t, mockDB.Close())
+			})
 
 			tt.mockSetup(mock)
 			ctx := context.Background()
@@ -241,7 +247,9 @@ func TestUserRepositoryUnit_GetUserByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			mockDB, mock, repo := setupRepositoryMockTest()
-			defer mockDB.Close()
+			t.Cleanup(func() {
+				assert.NoError(t, mockDB.Close())
+			})
 
 			tt.mockSetup(mock, tt.id)
 			ctx := context.Background()
@@ -299,7 +307,9 @@ func TestUserRepositoryUnit_GetUserByIDs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			mockDB, mock, repo := setupRepositoryMockTest()
-			defer mockDB.Close()
+			t.Cleanup(func() {
+				assert.NoError(t, mockDB.Close())
+			})
 
 			tt.mockSetup(mock, tt.ids)
 			ctx := context.Background()
@@ -356,7 +366,9 @@ func TestUserRepositoryUnit_UpdateUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			mockDB, mock, repo := setupRepositoryMockTest()
-			defer mockDB.Close()
+			t.Cleanup(func() {
+				assert.NoError(t, mockDB.Close())
+			})
 
 			tt.mockSetup(mock)
 			ctx := context.Background()
@@ -410,7 +422,9 @@ func TestUserRepositoryUnit_DeleteUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			mockDB, mock, repo := setupRepositoryMockTest()
-			defer mockDB.Close()
+			t.Cleanup(func() {
+				assert.NoError(t, mockDB.Close())
+			})
 
 			tt.mockSetup(mock, tt.id)
 			ctx := context.Background()
@@ -433,26 +447,27 @@ func TestUserRepositoryUnit_DeleteUser(t *testing.T) {
 
 // Fixed Benchmark using setup in loop:
 func BenchmarkUserRepository_GetUserByUsername(b *testing.B) {
+	mockDB, mock, repo := setupRepositoryMockTest()
+	defer func() {
+		_ = mockDB.Close()
+	}()
+
+	username := "benchuser"
+	query := regexp.QuoteMeta(`SELECT id, "name", username, email, "password",phone_number, "address", "role", created_at, updated_at FROM users WHERE username = $1 AND deleted_at IS NULL`)
+
 	for i := 0; i < b.N; i++ {
-		b.StopTimer() // Pause timer while setting up the mock
-		mockDB, mock, repo := setupRepositoryMockTest()
-
-		username := "benchuser"
-		query := regexp.QuoteMeta(`SELECT id, "name", username, email, "password",phone_number, "address", "role", created_at, updated_at FROM users WHERE username = $1 AND deleted_at IS NULL`)
-
 		mock.ExpectQuery(query).WithArgs(username).WillReturnRows(
 			sqlmock.NewRows([]string{"id", "name", "username", "email", "password", "phone_number", "address", "role", "created_at", "updated_at"}).
 				AddRow(uuid.New(), "Bench", username, "bench@ex.com", "pass", "123", "addr", "user", time.Now(), time.Now()),
 		)
+	}
 
-		ctx := context.Background()
-		b.StartTimer() // Resume timer
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
 
+	for i := 0; i < b.N; i++ {
 		_, _ = repo.GetUserByUsername(ctx, username)
-
-		b.StopTimer()
-		mockDB.Close()
-		b.StartTimer()
 	}
 }
 
@@ -462,98 +477,122 @@ func BenchmarkUserRepository_GetUserByUsername(b *testing.B) {
 // -------------------------------------------------------------------------
 
 func BenchmarkUserRepository_CreateUser(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		mockDB, mock, repo := setupRepositoryMockTest()
+	mockDB, mock, repo := setupRepositoryMockTest()
+	defer func() {
+		_ = mockDB.Close()
+	}()
 
-		param := &db.CreateUserParams{
-			ID: uuid.New(), Name: "Bench", Username: "bench", Email: "bench@ex.com",
-		}
+	param := &db.CreateUserParams{
+		ID: uuid.New(), Name: "Bench", Username: "bench", Email: "bench@ex.com",
+	}
+
+	for i := 0; i < b.N; i++ {
 		mock.ExpectQuery("(?i)INSERT INTO users").WillReturnRows(
 			sqlmock.NewRows([]string{"id", "name", "username", "email", "password", "phone_number", "address", "role", "created_at", "updated_at", "deleted_at"}).
 				AddRow(param.ID, "Test User", param.Username, "test@ex.com", "pwd", "123", "addr", "user", time.Now(), time.Now(), nil),
 		)
-		ctx := context.Background()
+	}
 
-		b.StartTimer()
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
 		_, _ = repo.CreateUser(ctx, param)
-		b.StopTimer()
-		mockDB.Close()
 	}
 }
 
 func BenchmarkUserRepository_GetAllUsers(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		mockDB, mock, repo := setupRepositoryMockTest()
+	mockDB, mock, repo := setupRepositoryMockTest()
+	defer func() {
+		_ = mockDB.Close()
+	}()
 
+	for i := 0; i < b.N; i++ {
 		mock.ExpectQuery("(?i)SELECT .* FROM users").WillReturnRows(
 			sqlmock.NewRows([]string{"id", "name", "username", "email", "password", "phone_number", "address", "role", "created_at", "updated_at", "deleted_at"}).
 				AddRow(uuid.New(), "User1", "user1", "u1@e.com", "x", "1", "a", "u", time.Now(), time.Now(), nil).
 				AddRow(uuid.New(), "User2", "user2", "u2@e.com", "x", "1", "a", "u", time.Now(), time.Now(), nil),
 		)
-		ctx := context.Background()
+	}
 
-		b.StartTimer()
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
 		_, _ = repo.GetAllUsers(ctx)
-		b.StopTimer()
-		mockDB.Close()
 	}
 }
 
 func BenchmarkUserRepository_GetUserByID(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		mockDB, mock, repo := setupRepositoryMockTest()
+	mockDB, mock, repo := setupRepositoryMockTest()
+	defer func() {
+		_ = mockDB.Close()
+	}()
 
-		id := uuid.New()
+	id := uuid.New()
+
+	for i := 0; i < b.N; i++ {
 		mock.ExpectQuery("(?i)SELECT .* FROM users WHERE id = \\$1").WithArgs(id).WillReturnRows(
 			sqlmock.NewRows([]string{"id", "name", "username", "email", "password", "phone_number", "address", "role", "created_at", "updated_at"}).
 				AddRow(id, "Test User", "testuser", "test@ex.com", "pwd", "123", "addr", "user", time.Now(), time.Now()),
 		)
-		ctx := context.Background()
+	}
 
-		b.StartTimer()
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
 		_, _ = repo.GetUserByID(ctx, id)
-		b.StopTimer()
-		mockDB.Close()
 	}
 }
 
 func BenchmarkUserRepository_UpdateUser(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		mockDB, mock, repo := setupRepositoryMockTest()
+	mockDB, mock, repo := setupRepositoryMockTest()
+	defer func() {
+		_ = mockDB.Close()
+	}()
 
-		param := &db.UpdateUserParams{ID: uuid.New(), Name: "Bench"}
+	param := &db.UpdateUserParams{ID: uuid.New(), Name: "Bench"}
+
+	for i := 0; i < b.N; i++ {
 		mock.ExpectQuery("(?i)UPDATE users SET").WillReturnRows(
 			sqlmock.NewRows([]string{"id", "name", "username", "email", "password", "phone_number", "address", "role", "created_at", "updated_at", "deleted_at"}).
 				AddRow(param.ID, param.Name, "testuser", "test@ex.com", "pwd", "123", "addr", "user", time.Now(), time.Now(), nil),
 		)
-		ctx := context.Background()
+	}
 
-		b.StartTimer()
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
 		_, _ = repo.UpdateUser(ctx, param)
-		b.StopTimer()
-		mockDB.Close()
 	}
 }
 
 func BenchmarkUserRepository_DeleteUser(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		mockDB, mock, repo := setupRepositoryMockTest()
+	mockDB, mock, repo := setupRepositoryMockTest()
+	defer func() {
+		_ = mockDB.Close()
+	}()
 
-		id := uuid.New()
+	id := uuid.New()
+
+	for i := 0; i < b.N; i++ {
 		mock.ExpectQuery("(?i)(UPDATE users SET deleted_at|DELETE FROM users)").WithArgs(id).WillReturnRows(
 			sqlmock.NewRows([]string{"id", "name", "username", "email", "password", "phone_number", "address", "role", "created_at", "updated_at", "deleted_at"}).
 				AddRow(id, "User1", "testuser", "test@ex.com", "pwd", "123", "addr", "user", time.Now(), time.Now(), time.Now()),
 		)
-		ctx := context.Background()
+	}
 
-		b.StartTimer()
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
 		_, _ = repo.DeleteUser(ctx, id)
-		b.StopTimer()
-		mockDB.Close()
 	}
 }

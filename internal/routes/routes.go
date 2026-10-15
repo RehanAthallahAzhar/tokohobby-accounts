@@ -30,7 +30,7 @@ func InitRoutes(e *echo.Echo, userHandler *handlers.UserHandler, authHandler *ha
 	{
 		// all users
 		protected.GET("/profile", userHandler.GetUserProfile)
-		protected.PUT("", userHandler.UpdateUser)
+		protected.PATCH("", userHandler.UpdateUser)
 		protected.DELETE("/:id", userHandler.DeleteUser)
 		protected.POST("/logout", authHandler.Logout)
 

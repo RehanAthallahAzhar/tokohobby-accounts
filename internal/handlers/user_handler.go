@@ -10,7 +10,7 @@ import (
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/models"
 	contextpkg "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/context"
-	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
+	appErrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/repositories"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/services"
 )
@@ -71,7 +71,7 @@ func (h *UserHandler) GetUserByID(c echo.Context) error {
 
 	id, err := helpers.GetIDFromPathParam(c, "id")
 	if err != nil {
-		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+		return handleError(c, http.StatusBadRequest, appErrors.ErrInvalidRequestPayload)
 	}
 
 	res, err := h.UserService.GetUserByID(ctx, id)
@@ -97,7 +97,7 @@ func (h *UserHandler) GetUserProfile(c echo.Context) error {
 
 	id, err := contextpkg.GetUserIDFromContext(ctx)
 	if err != nil {
-		return handleError(c, http.StatusUnauthorized, apperrors.ErrInvalidUserSession)
+		return handleError(c, http.StatusUnauthorized, appErrors.ErrInvalidUserSession)
 	}
 
 	res, err := h.UserService.GetUserByID(ctx, id)
@@ -127,12 +127,12 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 
 	id, err := contextpkg.GetUserIDFromContext(ctx)
 	if err != nil {
-		return handleError(c, http.StatusUnauthorized, apperrors.ErrInvalidUserSession)
+		return handleError(c, http.StatusUnauthorized, appErrors.ErrInvalidUserSession)
 	}
 
 	var req models.UserUpdateRequest
 	if err := c.Bind(&req); err != nil {
-		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+		return handleError(c, http.StatusBadRequest, appErrors.ErrInvalidRequestPayload)
 	}
 
 	res, err := h.UserService.UpdateUser(ctx, id, &req)
@@ -160,7 +160,7 @@ func (h *UserHandler) DeleteUser(c echo.Context) error {
 
 	id, err := helpers.GetIDFromPathParam(c, "id")
 	if err != nil {
-		return handleError(c, http.StatusBadRequest, apperrors.ErrInvalidRequestPayload)
+		return handleError(c, http.StatusBadRequest, appErrors.ErrInvalidRequestPayload)
 	}
 
 	res, err := h.UserService.DeleteUser(ctx, id)

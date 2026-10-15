@@ -24,6 +24,7 @@ var (
 	ErrFailedToRevokeToken   = errors.New("failed to revoke token")
 	ErrTokenNotFound         = errors.New("token not found")
 	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrPasswordNotMatch      = errors.New("password not match")
 	ErrAccountDisabled       = errors.New("account disabled")
 	ErrSessionError          = errors.New("session error")
 

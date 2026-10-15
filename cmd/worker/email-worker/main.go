@@ -42,7 +42,11 @@ func main() {
 		log.Error("Failed to connect to RabbitMQ", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer rmq.Close()
+	defer func() {
+		if err := rmq.Close(); err != nil {
+			log.Error("Failed to close RabbitMQ connection cleanly", slog.Any("error", err))
+		}
+	}()
 
 	log.Info("Connected to RabbitMQ successfully")
 

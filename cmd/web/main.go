@@ -48,7 +48,8 @@ import (
 	rabbitmqpkg "github.com/RehanAthallahAzhar/tokohobby-messaging/rabbitmq"
 
 	_ "github.com/RehanAthallahAzhar/tokohobby-accounts/docs"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+
+	echootel "github.com/labstack/echo-otel/v4"
 )
 
 // @title TokoHobby Accounts API
@@ -96,6 +97,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Error("Failed to close DB connection cleanly", slog.Any("error", err))
+		}
+	}()
+
 	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		dbCredential.Username,
 		dbCredential.Password,
@@ -117,8 +124,6 @@ func main() {
 		log.Error("Failed to run migrations", slog.Any("error", err))
 		os.Exit(1)
 	}
-
-	defer conn.Close()
 
 	// Init SQLC
 	sqlcQueries := dbGenerated.New(conn)
@@ -147,7 +152,12 @@ func main() {
 		log.Error("Failed to connect to RabbitMQ", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer rmq.Close()
+
+	defer func() {
+		if err := rmq.Close(); err != nil {
+			log.Error("Failed to close RabbitMQ connection cleanly", slog.Any("error", err))
+		}
+	}()
 
 	// Setup exchange
 	if err := rabbitmqpkg.SetupUserExchange(rmq); err != nil {
@@ -163,7 +173,13 @@ func main() {
 	if cfg.Kafka.Brokers != "" {
 		kafkaBrokers := strings.Split(cfg.Kafka.Brokers, ",")
 		kafkaProducer = kafka.NewActivityProducer(kafkaBrokers)
-		defer kafkaProducer.Close()
+
+		defer func() {
+			if err := kafkaProducer.Close(); err != nil {
+				log.Error("Failed to close kafka producer cleanly", slog.Any("error", err))
+			}
+		}()
+
 		log.Info("Kafka producer initialized", slog.Any("brokers", kafkaBrokers))
 	} else {
 		log.Warn("Kafka brokers not configured, user activity tracking disabled")
@@ -231,7 +247,7 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.RequestID())
 	e.Use(middlewareApp.LoggingMiddleware(log))
-	e.Use(otelecho.Middleware("accounts-service"))
+	e.Use(echootel.NewMiddleware("tokohobby-accounts-service"))
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"}, // Nginx will handle stricter CORS (NOT FOR PRODUCTION)
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},

@@ -7,7 +7,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/db"
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/messaging/rabbitmq"
@@ -92,23 +91,11 @@ func (s *UserServiceImpl) UpdateUser(ctx context.Context, id uuid.UUID, req *mod
 		return nil, err
 	}
 
-	hashedPassword := req.Password
-	if req.Password != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, err
-		}
-		hashedPassword = string(hash)
-	}
-
 	dbParams := &db.UpdateUserParams{
 		ID:          id,
-		Name:        req.Name,
-		Username:    req.Username,
-		Email:       req.Email,
-		Password:    hashedPassword,
-		Address:     req.Address,
-		PhoneNumber: req.PhoneNumber,
+		Name:        *req.Name,
+		Address:     *req.Address,
+		PhoneNumber: *req.PhoneNumber,
 	}
 
 	user, err := s.userRepo.UpdateUser(ctx, dbParams)

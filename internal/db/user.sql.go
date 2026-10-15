@@ -298,12 +298,8 @@ const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET
     "name" = $2,
-    username = $3,
-    email = $4,
-    "password" = $5,
-    "role" = $6,
-    phone_number = $7,
-    "address" = $8,
+    "address" = $3,
+    phone_number = $4,
     updated_at = now()
 WHERE id = $1 AND deleted_at IS NULL RETURNING id, name, username, email, phone_number, address, password, role, created_at, updated_at, deleted_at
 `
@@ -311,24 +307,16 @@ WHERE id = $1 AND deleted_at IS NULL RETURNING id, name, username, email, phone_
 type UpdateUserParams struct {
 	ID          uuid.UUID
 	Name        string
-	Username    string
-	Email       string
-	Password    string
-	Role        string
-	PhoneNumber string
 	Address     string
+	PhoneNumber string
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, updateUser,
 		arg.ID,
 		arg.Name,
-		arg.Username,
-		arg.Email,
-		arg.Password,
-		arg.Role,
-		arg.PhoneNumber,
 		arg.Address,
+		arg.PhoneNumber,
 	)
 	var i User
 	err := row.Scan(

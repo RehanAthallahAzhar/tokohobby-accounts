@@ -8,7 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/RehanAthallahAzhar/tokohobby-accounts/internal/db"
-	apperrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
+	appErrors "github.com/RehanAthallahAzhar/tokohobby-accounts/internal/pkg/errors"
 	"github.com/google/uuid"
 )
 
@@ -33,7 +33,7 @@ func NewUserRepository(sqlcQueries *db.Queries) UserRepository {
 
 func (u *userRepository) CreateUser(ctx context.Context, param *db.CreateUserParams) (*db.User, error) {
 	if param == nil {
-		return nil, apperrors.ErrInvalidQuery
+		return nil, appErrors.ErrInvalidQuery
 	}
 
 	res, err := u.sqlcQueries.CreateUser(ctx, *param)
@@ -49,7 +49,7 @@ func (u *userRepository) GetAllUsers(ctx context.Context) ([]db.GetAllUsersRow, 
 	rows, err := u.sqlcQueries.GetAllUsers(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperrors.ErrUserNotFound
+			return nil, appErrors.ErrUserNotFound
 		}
 
 		return nil, fmt.Errorf("user_repo: failed to get all users: %w", err)
@@ -62,7 +62,7 @@ func (u *userRepository) GetUserByUsername(ctx context.Context, username string)
 	row, err := u.sqlcQueries.GetUserByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperrors.ErrUserNotFound
+			return nil, appErrors.ErrUserNotFound
 		}
 
 		return nil, fmt.Errorf("user_repo: failed to get user by username: %w", err)
@@ -75,7 +75,7 @@ func (u *userRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*db.Get
 	row, err := u.sqlcQueries.GetUserByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperrors.ErrUserNotFound
+			return nil, appErrors.ErrUserNotFound
 		}
 		return nil, fmt.Errorf("user_repo: failed to get user by id: %w", err)
 	}
@@ -87,7 +87,7 @@ func (u *userRepository) GetUserByIDs(ctx context.Context, id []uuid.UUID) ([]db
 	row, err := u.sqlcQueries.GetUserByIDs(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, apperrors.ErrUserNotFound
+			return nil, appErrors.ErrUserNotFound
 		}
 		return nil, fmt.Errorf("user_repo: failed to get users by ids: %w", err)
 	}
